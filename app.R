@@ -56,7 +56,7 @@ ui <- dashboardPage(
             title = "📁 Upload Your DEMATEL Matrix", 
             status = "primary", 
             solidHeader = TRUE,
-            width = 8,
+            width = 4,
             
             h4("Step 1: Choose Your Input Method"),
             
@@ -110,7 +110,7 @@ ui <- dashboardPage(
             h4("Step 3: Process Matrix"),
             actionButton(
               "process_matrix",
-              "🚀 Process Matrix & Start Analysis",
+              "Process Matrix & Start Analysis",
               class = "btn-primary btn-lg",
               style = "margin-top: 10px;"
             )
@@ -120,7 +120,7 @@ ui <- dashboardPage(
             title = "📊 Matrix Preview", 
             status = "info", 
             solidHeader = TRUE,
-            width = 4,
+            width = 8,
             
             conditionalPanel(
               condition = "output.matrix_processed",
@@ -783,7 +783,7 @@ server <- function(input, output, session) {
       values$spectral_results <- spectral_results
       values$matrix_processed <- TRUE
       
-      showNotification("✅ Matrix processed successfully!", type = "success")
+      showNotification("✅ Matrix processed successfully!", type = "message")
       
     }, error = function(e) {
       showNotification(paste("❌ Error processing matrix:", e$message), type = "error")
@@ -809,7 +809,7 @@ server <- function(input, output, session) {
         values$sensitivity_results <- sens_obj
         values$sensitivity_computed <- TRUE
         
-        showNotification("✅ Sensitivity analysis completed!", type = "success")
+        showNotification("✅ Sensitivity analysis completed!", type = "message")
         
       }, error = function(e) {
         showNotification(paste("❌ Error in sensitivity analysis:", e$message), type = "error")
@@ -831,7 +831,7 @@ server <- function(input, output, session) {
       values$intervention_results <- intervention_results
       values$intervention_computed <- TRUE
       
-      showNotification("✅ Intervention analysis completed!", type = "success")
+      showNotification("✅ Intervention analysis completed!", type = "message")
       
     }, error = function(e) {
       showNotification(paste("❌ Error in intervention analysis:", e$message), type = "error")

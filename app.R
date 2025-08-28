@@ -308,27 +308,27 @@ ui <- dashboardPage(
             condition = "output.sensitivity_computed",
             fluidRow(
               box(
-                title = "🌡️ Sensitivity Heatmaps", 
+                title = "🌡️ Sensitivity Analysis", 
                 status = "warning", 
                 solidHeader = TRUE,
                 width = 6,
                 
-                h4("Raw Sensitivity Values:"),
+                h4("Sensitivity Values Heatmap:"),
                 plotOutput("sensitivity_heatmap", height = "400px"),
                 
                 br(),
-                h4("Absolute Sensitivity (Magnitude):"),
-                plotOutput("abs_sensitivity_heatmap", height = "400px")
+                h4("Sensitivity Value Distribution:"),
+                plotOutput("sensitivity_distribution", height = "300px")
               ),
               
               box(
-                title = "📊 Distribution & Analysis", 
+                title = "📊 DEMATEL Analysis", 
                 status = "warning", 
                 solidHeader = TRUE,
                 width = 6,
                 
-                h4("Sensitivity Value Distribution:"),
-                plotOutput("sensitivity_distribution", height = "300px"),
+                h4("Classical Interrelationship Map:"),
+                plotOutput("interrelationship_map", height = "400px"),
                 
                 br(),
                 h4("Top Critical Relationships:"),
@@ -389,26 +389,43 @@ ui <- dashboardPage(
           
           fluidRow(
             box(
-              title = "🌐 Network Visualization", 
+              title = "🌐 DEMATEL Network Visualization", 
               status = "info", 
               solidHeader = TRUE,
               width = 8,
               
-              h4("Critical Relationships Network:"),
-              plotOutput("network_plot", height = "500px"),
+              h4("Cause-Effect Network:"),
+              p("Shows the strongest cause-effect relationships from the DEMATEL analysis."),
+              plotOutput("dematel_network_plot", height = "500px"),
               
               br(),
               
-              radioButtons(
-                "network_layout",
-                "Layout Style:",
-                choices = list(
-                  "Spring Layout" = "spring",
-                  "Circle Layout" = "circle",
-                  "Hierarchical" = "hierarchical"
+              fluidRow(
+                column(
+                  6,
+                  radioButtons(
+                    "network_layout",
+                    "Layout Style:",
+                    choices = list(
+                      "Spring Layout" = "spring",
+                      "Circle Layout" = "circle", 
+                      "Hierarchical" = "hierarchical"
+                    ),
+                    selected = "spring",
+                    inline = TRUE
+                  )
                 ),
-                selected = "spring",
-                inline = TRUE
+                column(
+                  6,
+                  sliderInput(
+                    "network_threshold",
+                    "Relationship threshold (percentile):",
+                    min = 70,
+                    max = 99,
+                    value = 90,
+                    step = 5
+                  )
+                )
               )
             ),
             
@@ -428,8 +445,8 @@ ui <- dashboardPage(
               htmlOutput("key_insights")
             )
           )
-        )
-      ),
+            )
+          ),
       
       # Intervention Analysis Tab
       tabItem(
@@ -480,9 +497,9 @@ ui <- dashboardPage(
                 
                 sliderInput(
                   "max_interventions",
-                  "Show top N interventions:",
-                  min = 5,
-                  max = 50,
+                  "Show top n interventions:",
+                  min = 0,
+                  max = 100,
                   value = 15,
                   step = 5
                 )
@@ -1008,36 +1025,20 @@ server <- function(input, output, session) {
     return(p)
   })
   
-  # Output: Absolute sensitivity heatmap
-  output$abs_sensitivity_heatmap <- renderPlot({
+  # Output: DEMATEL Interrelationship Map
+  output$interrelationship_map <- renderPlot({
     req(values$sensitivity_results)
     
-    sens_melted <- reshape2::melt(abs(values$sensitivity_results$sensitivity_matrix))
-    names(sens_melted) <- c("From_Factor", "To_Factor", "Sensitivity")
-    sens_melted <- sens_melted[!is.na(sens_melted$Sensitivity), ]
-    
-    p <- ggplot(sens_melted, aes(x = To_Factor, y = From_Factor, fill = Sensitivity)) +
-      geom_tile(color = "white", size = 0.5) +
-      viridis::scale_fill_viridis(name = "Abs. Sensitivity", option = "plasma") +
-      theme_minimal() +
-      theme(
-        axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
-        axis.text.y = element_text(size = 10),
-        plot.title = element_text(size = 14, face = "bold"),
-        legend.title = element_text(size = 12),
-        panel.grid = element_blank()
-      ) +
-      labs(
-        title = "Absolute Sensitivity: |∂λmax/∂aij|",
-        x = "To Factor (j)",
-        y = "From Factor (i)"
-      )
-    
-    if (input$show_heatmap_values && nrow(values$matrix_A) <= 10) {
-      p <- p + geom_text(aes(label = round(Sensitivity, 3)), size = 3, color = "white")
-    }
-    
-    return(p)
+    tryCatch({
+      create_dematel_interrelationship_map(values$sensitivity_results)
+    }, error = function(e) {
+      ggplot() +
+        annotate("text", x = 0.5, y = 0.5, 
+                 label = paste("Interrelationship map\nnot available:\n", e$message),
+                 size = 6, hjust = 0.5, vjust = 0.5) +
+        theme_void() +
+        labs(title = "DEMATEL Interrelationship Map - Error")
+    })
   })
   
   # Output: Sensitivity distribution

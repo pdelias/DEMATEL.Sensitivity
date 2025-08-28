@@ -1,4 +1,20 @@
-.Rproj.user
+# R files
 .Rhistory
+.Rapp.history
 .RData
 .Ruserdata
+
+# RStudio files
+*.Rproj
+.Rproj.user/
+
+# Shiny files
+rsconnect/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Documentation
+*.docx
+*.doc

@@ -1169,26 +1169,44 @@ server <- function(input, output, session) {
   output$dematel_network_plot <- renderPlot({
     req(values$sensitivity_results)
     
-    tryCatch({
-      # Use the correct function name from the visualization file
-      plot_dematel_network(values$sensitivity_results, 
-                           threshold_percentile = input$network_threshold,
-                           layout = input$network_layout)
-    }, error = function(e) {
-      # Fallback: try the old function name for backwards compatibility
-      tryCatch({
-        plot_sensitivity_network(values$sensitivity_results, 
-                                 threshold_percentile = input$network_threshold,
-                                 layout = input$network_layout)
-      }, error = function(e2) {
-        # Create a simple fallback plot
+    # Check if T matrix exists
+    if (is.null(values$sensitivity_results$T)) {
+      return(
         ggplot() +
           annotate("text", x = 0.5, y = 0.5, 
-                   label = paste("Network visualization\nnot available:\n", e$message),
+                   label = "T matrix not available\nfor network visualization",
                    size = 6, hjust = 0.5, vjust = 0.5) +
           theme_void() +
-          labs(title = "Network Plot - Error")
-      })
+          labs(title = "Network Plot - T Matrix Missing")
+      )
+    }
+    
+    # Debug: Check if we have the right data structure
+    cat("T matrix dimensions:", dim(values$sensitivity_results$T), "\n")
+    cat("Factor names:", values$sensitivity_results$factor_names, "\n")
+    cat("Network threshold:", input$network_threshold, "\n")
+    cat("Network layout:", input$network_layout, "\n")
+    
+    tryCatch({
+      # Call the fixed network function
+      plot_dematel_network.DEMATEL_Sensitivity(
+        values$sensitivity_results, 
+        threshold_percentile = input$network_threshold,
+        layout = input$network_layout
+      )
+    }, error = function(e) {
+      cat("Network plot error:", e$message, "\n")
+      
+      # Detailed fallback plot with error info
+      ggplot() +
+        annotate("text", x = 0.5, y = 0.6, 
+                 label = "Network visualization error:",
+                 size = 5, hjust = 0.5, vjust = 0.5, fontface = "bold") +
+        annotate("text", x = 0.5, y = 0.4, 
+                 label = e$message,
+                 size = 4, hjust = 0.5, vjust = 0.5) +
+        theme_void() +
+        labs(title = "DEMATEL Network - Error Occurred")
     })
   })
   

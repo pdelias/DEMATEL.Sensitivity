@@ -378,12 +378,13 @@ plot_dematel_network.DEMATEL_Sensitivity <- function(obj, threshold_percentile =
     stop("No significant relationships found at the specified threshold")
   }
   
-  # Create relationships data frame
+  # Create relationships data frame - CORRECTED CAUSAL DIRECTION
+  # T[i,j] means factor i influences factor j, so i is cause, j is effect
   relationships <- data.frame(
-    from_factor = obj$factor_names[significant_indices[, 1]],
-    to_factor = obj$factor_names[significant_indices[, 2]],
-    from_index = significant_indices[, 1],
-    to_index = significant_indices[, 2],
+    cause_factor = obj$factor_names[significant_indices[, 1]],  # Row index = cause
+    effect_factor = obj$factor_names[significant_indices[, 2]], # Column index = effect
+    cause_index = significant_indices[, 1],
+    effect_index = significant_indices[, 2],
     strength = obj$T[significant_indices],
     stringsAsFactors = FALSE
   )
@@ -418,39 +419,60 @@ plot_dematel_network.DEMATEL_Sensitivity <- function(obj, threshold_percentile =
     stop("Layout must be 'circle', 'spring', or 'hierarchical'")
   }
   
-  # Prepare edge data with proper start/end coordinates
+  # Prepare edge data with proper start/end coordinates - CORRECTED
+  # Edges go from cause to effect
   edges <- relationships
-  edges <- merge(edges, node_positions, by.x = "from_factor", by.y = "factor")
+  # Merge cause positions
+  edges <- merge(edges, node_positions, by.x = "cause_factor", by.y = "factor")
   names(edges)[names(edges) %in% c("x", "y")] <- c("x_start", "y_start")
-  edges <- merge(edges, node_positions, by.x = "to_factor", by.y = "factor")
+  # Merge effect positions  
+  edges <- merge(edges, node_positions, by.x = "effect_factor", by.y = "factor")
   names(edges)[names(edges) %in% c("x", "y")] <- c("x_end", "y_end")
+  
+  # Adjust edge endpoints to stop before reaching the node centers
+  # This prevents arrows from being hidden behind nodes
+  edge_offset <- 0.08  # Distance to stop before node center
+  
+  # Calculate shortened edge endpoints
+  edges$edge_length <- sqrt((edges$x_end - edges$x_start)^2 + (edges$y_end - edges$y_start)^2)
+  edges$x_end_adj <- edges$x_end - edge_offset * (edges$x_end - edges$x_start) / edges$edge_length
+  edges$y_end_adj <- edges$y_end - edge_offset * (edges$y_end - edges$y_start) / edges$edge_length
+  edges$x_start_adj <- edges$x_start + edge_offset * (edges$x_end - edges$x_start) / edges$edge_length
+  edges$y_start_adj <- edges$y_start + edge_offset * (edges$y_end - edges$y_start) / edges$edge_length
+  
+  # Handle any NaN values from zero-length edges
+  edges$x_end_adj[!is.finite(edges$x_end_adj)] <- edges$x_end[!is.finite(edges$x_end_adj)]
+  edges$y_end_adj[!is.finite(edges$y_end_adj)] <- edges$y_end[!is.finite(edges$y_end_adj)]
+  edges$x_start_adj[!is.finite(edges$x_start_adj)] <- edges$x_start[!is.finite(edges$x_start_adj)]
+  edges$y_start_adj[!is.finite(edges$y_start_adj)] <- edges$y_start[!is.finite(edges$y_start_adj)]
   
   # Create the plot
   p <- ggplot2::ggplot() +
-    # Draw edges (cause → effect relationships)
+    # Draw edges (cause → effect relationships) with better arrows
     ggplot2::geom_segment(
       data = edges,
-      ggplot2::aes(x = x_start, y = y_start, xend = x_end, yend = y_end,
-                   linewidth = strength),
-      arrow = ggplot2::arrow(length = ggplot2::unit(0.02, "npc"), type = "closed"),
-      alpha = 0.7, color = "#2166ac"
+      ggplot2::aes(x = x_start_adj, y = y_start_adj, 
+                   xend = x_end_adj, yend = y_end_adj,
+                   size = strength),  # Use 'size' instead of 'linewidth' for compatibility
+      arrow = ggplot2::arrow(length = ggplot2::unit(0.3, "cm"), type = "closed"),
+      alpha = 0.8, color = "#2166ac"
     ) +
     # Draw nodes
     ggplot2::geom_point(
       data = node_positions,
       ggplot2::aes(x = x, y = y),
-      size = 8, color = "white", fill = "#5e3c99",
+      size = 20, color = "white", fill = "#5e3c99",
       shape = 21, stroke = 2
     ) +
     # Add node labels
     ggplot2::geom_text(
       data = node_positions,
       ggplot2::aes(x = x, y = y, label = factor),
-      size = 3, fontface = "bold", color = "white"
+      size = 2.5, fontface = "bold", color = "white"
     ) +
-    ggplot2::scale_linewidth_continuous(
+    ggplot2::scale_size_continuous(
       name = "Relationship\nStrength",
-      range = c(0.5, 3)
+      range = c(0.8, 2.5)
     ) +
     ggplot2::theme_void() +
     ggplot2::theme(

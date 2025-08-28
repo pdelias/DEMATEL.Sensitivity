@@ -36,12 +36,15 @@ visualize_sensitivity.DEMATEL_Sensitivity <- function(obj, save_plots = FALSE, p
     stop("Please compute sensitivity matrix first")
   }
   
-  # Check if ggplot2 and related packages are available
-  required_packages <- c("ggplot2", "reshape2", "viridis", "gridExtra")
-  missing_packages <- required_packages[!sapply(required_packages, requireNamespace, quietly = TRUE)]
+  # Check if required packages are available
+  required_packages <- c("ggplot2", "reshape2")
+  missing_packages <- required_packages[!sapply(required_packages, function(pkg) {
+    requireNamespace(pkg, quietly = TRUE)
+  })]
   
   if (length(missing_packages) > 0) {
-    stop("Required packages not available: ", paste(missing_packages, collapse = ", "))
+    stop("Required packages not available: ", paste(missing_packages, collapse = ", "), 
+         "\nPlease install with: install.packages(c('", paste(missing_packages, collapse = "', '"), "'))")
   }
   
   if (save_plots && !dir.exists(plot_dir)) {
@@ -109,7 +112,7 @@ visualize_sensitivity.DEMATEL_Sensitivity <- function(obj, save_plots = FALSE, p
     )
   
   # 3. Top relationships
-  tryCatch({
+  p3 <- tryCatch({
     critical_rels <- identify_critical_relationships(obj, threshold_percentile = 80)
     
     if (nrow(critical_rels) > 0) {
@@ -117,7 +120,7 @@ visualize_sensitivity.DEMATEL_Sensitivity <- function(obj, save_plots = FALSE, p
       top_10$relationship <- paste0(top_10$from_factor, " → ", top_10$to_factor)
       top_10$relationship <- factor(top_10$relationship, levels = rev(top_10$relationship))
       
-      p3 <- ggplot2::ggplot(top_10, ggplot2::aes(x = relationship, y = sensitivity, fill = interpretation)) +
+      ggplot2::ggplot(top_10, ggplot2::aes(x = relationship, y = sensitivity, fill = interpretation)) +
         ggplot2::geom_col(alpha = 0.8) +
         ggplot2::coord_flip() +
         ggplot2::scale_fill_manual(
@@ -139,14 +142,14 @@ visualize_sensitivity.DEMATEL_Sensitivity <- function(obj, save_plots = FALSE, p
         ggplot2::geom_hline(yintercept = 0, color = "black", linetype = "solid", alpha = 0.3)
     } else {
       # Fallback plot if no critical relationships found
-      p3 <- ggplot2::ggplot() +
+      ggplot2::ggplot() +
         ggplot2::annotate("text", x = 0.5, y = 0.5, label = "No critical relationships\nfound at 80th percentile",
                           size = 6, hjust = 0.5, vjust = 0.5) +
         ggplot2::theme_void() +
         ggplot2::labs(title = "Critical Relationships")
     }
   }, error = function(e) {
-    p3 <- ggplot2::ggplot() +
+    ggplot2::ggplot() +
       ggplot2::annotate("text", x = 0.5, y = 0.5, label = paste("Error creating\ncritical relationships plot:\n", e$message),
                         size = 5, hjust = 0.5, vjust = 0.5) +
       ggplot2::theme_void() +
@@ -154,9 +157,18 @@ visualize_sensitivity.DEMATEL_Sensitivity <- function(obj, save_plots = FALSE, p
   })
   
   # 4. Classical DEMATEL Interrelationship Map
-  p4 <- create_dematel_interrelationship_map(obj)
+  p4 <- tryCatch({
+    create_dematel_interrelationship_map(obj)
+  }, error = function(e) {
+    ggplot2::ggplot() +
+      ggplot2::annotate("text", x = 0.5, y = 0.5, label = paste("Error creating\ninterrelationship map:\n", e$message),
+                        size = 5, hjust = 0.5, vjust = 0.5) +
+      ggplot2::theme_void() +
+      ggplot2::labs(title = "Interrelationship Map - Error")
+  })
   
   # Combine plots
+  combined_plot <- NULL
   if (requireNamespace("gridExtra", quietly = TRUE)) {
     tryCatch({
       combined_plot <- gridExtra::grid.arrange(p1, p2, p3, p4, ncol = 2)
@@ -164,28 +176,28 @@ visualize_sensitivity.DEMATEL_Sensitivity <- function(obj, save_plots = FALSE, p
       warning("Could not create combined plot: ", e$message)
       combined_plot <- NULL
     })
-  } else {
-    combined_plot <- NULL
   }
   
   # Save plots if requested
   if (save_plots) {
     tryCatch({
-      ggplot2::ggsave(file.path(plot_dir, "sensitivity_heatmap.png"), p1,
-                      width = 10, height = 8, dpi = 300)
-      ggplot2::ggsave(file.path(plot_dir, "sensitivity_distribution.png"), p2,
-                      width = 8, height = 6, dpi = 300)
-      ggplot2::ggsave(file.path(plot_dir, "top_relationships.png"), p3,
-                      width = 10, height = 8, dpi = 300)
-      ggplot2::ggsave(file.path(plot_dir, "dematel_interrelationship_map.png"), p4,
-                      width = 10, height = 8, dpi = 300)
-      
-      if (!is.null(combined_plot)) {
-        ggplot2::ggsave(file.path(plot_dir, "combined_sensitivity_analysis.png"), combined_plot,
-                        width = 16, height = 12, dpi = 300)
+      if (requireNamespace("ggplot2", quietly = TRUE)) {
+        ggplot2::ggsave(file.path(plot_dir, "sensitivity_heatmap.png"), p1,
+                        width = 10, height = 8, dpi = 300)
+        ggplot2::ggsave(file.path(plot_dir, "sensitivity_distribution.png"), p2,
+                        width = 8, height = 6, dpi = 300)
+        ggplot2::ggsave(file.path(plot_dir, "top_relationships.png"), p3,
+                        width = 10, height = 8, dpi = 300)
+        ggplot2::ggsave(file.path(plot_dir, "dematel_interrelationship_map.png"), p4,
+                        width = 10, height = 8, dpi = 300)
+        
+        if (!is.null(combined_plot)) {
+          ggplot2::ggsave(file.path(plot_dir, "combined_sensitivity_analysis.png"), combined_plot,
+                          width = 16, height = 12, dpi = 300)
+        }
+        
+        cat("Plots saved to:", plot_dir, "\n")
       }
-      
-      cat("Plots saved to:", plot_dir, "\n")
     }, error = function(e) {
       warning("Error saving plots: ", e$message)
     })
@@ -228,6 +240,10 @@ create_dematel_interrelationship_map <- function(obj) {
 create_dematel_interrelationship_map.DEMATEL_Sensitivity <- function(obj) {
   if (is.null(obj$T)) {
     stop("Total relations matrix T is required for interrelationship map")
+  }
+  
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    stop("ggplot2 package is required for interrelationship map")
   }
   
   # Calculate r (row sums) and c (column sums) from T matrix
@@ -286,21 +302,30 @@ create_dematel_interrelationship_map.DEMATEL_Sensitivity <- function(obj) {
       subtitle = "Factor positioning by prominence and net influence",
       x = "Prominence (r + c): Total Involvement",
       y = "Net Effect (r - c): Cause ↑ / Effect ↓"
-    ) +
+    )
+  
+  # Add quadrant labels with safe coordinate calculation
+  tryCatch({
+    x_range <- range(prominence)
+    y_range <- range(net_effect)
     
-    # Add quadrant labels
-    ggplot2::annotate("text", x = max(prominence) * 0.9, y = max(net_effect) * 0.9, 
-                      label = "High Prominence\nNet Cause", 
-                      size = 3, alpha = 0.6, fontface = "italic") +
-    ggplot2::annotate("text", x = min(prominence) * 1.1, y = max(net_effect) * 0.9, 
-                      label = "Low Prominence\nNet Cause", 
-                      size = 3, alpha = 0.6, fontface = "italic") +
-    ggplot2::annotate("text", x = max(prominence) * 0.9, y = min(net_effect) * 0.9, 
-                      label = "High Prominence\nNet Effect", 
-                      size = 3, alpha = 0.6, fontface = "italic") +
-    ggplot2::annotate("text", x = min(prominence) * 1.1, y = min(net_effect) * 0.9, 
-                      label = "Low Prominence\nNet Effect", 
-                      size = 3, alpha = 0.6, fontface = "italic")
+    p <- p +
+      ggplot2::annotate("text", x = x_range[2] * 0.9, y = y_range[2] * 0.9, 
+                        label = "High Prominence\nNet Cause", 
+                        size = 3, alpha = 0.6, fontface = "italic") +
+      ggplot2::annotate("text", x = x_range[1] * 1.1, y = y_range[2] * 0.9, 
+                        label = "Low Prominence\nNet Cause", 
+                        size = 3, alpha = 0.6, fontface = "italic") +
+      ggplot2::annotate("text", x = x_range[2] * 0.9, y = y_range[1] * 0.9, 
+                        label = "High Prominence\nNet Effect", 
+                        size = 3, alpha = 0.6, fontface = "italic") +
+      ggplot2::annotate("text", x = x_range[1] * 1.1, y = y_range[1] * 0.9, 
+                        label = "Low Prominence\nNet Effect", 
+                        size = 3, alpha = 0.6, fontface = "italic")
+  }, error = function(e) {
+    # Skip quadrant labels if there's an error
+    warning("Could not add quadrant labels: ", e$message)
+  })
   
   return(p)
 }
@@ -339,6 +364,11 @@ plot_dematel_network.DEMATEL_Sensitivity <- function(obj, threshold_percentile =
   # Get significant relationships from T matrix (cause-effect relationships)
   T_values <- as.vector(obj$T)
   T_values <- T_values[T_values > 0]  # Only positive relationships
+  
+  if (length(T_values) == 0) {
+    stop("No positive relationships found in T matrix")
+  }
+  
   threshold <- quantile(T_values, threshold_percentile / 100, na.rm = TRUE)
   
   # Find relationships above threshold
@@ -438,8 +468,14 @@ plot_dematel_network.DEMATEL_Sensitivity <- function(obj, threshold_percentile =
   return(p)
 }
 
-# Update the old function name for backward compatibility
+# Backward compatibility function
+#' @export
 plot_sensitivity_network <- function(obj, threshold_percentile = 90, layout = "spring") {
   warning("plot_sensitivity_network is deprecated. Use plot_dematel_network instead.")
   plot_dematel_network(obj, threshold_percentile, layout)
+}
+
+# Helper function for null coalescing
+`%||%` <- function(x, y) {
+  if (is.null(x)) y else x
 }

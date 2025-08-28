@@ -15,6 +15,7 @@ library(reshape2)
 source("R/dematel_spectral.R", local = TRUE)
 source("R/sensitivity-core.R", local = TRUE)
 source("R/sensitivity-methods.R", local = TRUE)
+source("R/sensitivity-visualization.R", local = TRUE)
 source("R/ui_components.R", local = TRUE)
 
 # Define UI
@@ -268,8 +269,8 @@ ui <- dashboardPage(
                 sliderInput(
                   "critical_threshold",
                   "Critical relationships threshold (percentile):",
-                  min = 50,
-                  max = 99,
+                  min = 0,
+                  max = 100,
                   value = 90,
                   step = 5
                 )
@@ -308,7 +309,7 @@ ui <- dashboardPage(
             condition = "output.sensitivity_computed",
             fluidRow(
               box(
-                title = "🌡️ Sensitivity Analysis", 
+                title = "🌡️ Sensitivity Heatmap", 
                 status = "warning", 
                 solidHeader = TRUE,
                 width = 6,
@@ -322,7 +323,7 @@ ui <- dashboardPage(
               ),
               
               box(
-                title = "📊 DEMATEL Analysis", 
+                title = "📊 DEMATEL Classical Analysis", 
                 status = "warning", 
                 solidHeader = TRUE,
                 width = 6,
@@ -420,8 +421,8 @@ ui <- dashboardPage(
                   sliderInput(
                     "network_threshold",
                     "Relationship threshold (percentile):",
-                    min = 70,
-                    max = 99,
+                    min = 0,
+                    max = 100,
                     value = 90,
                     step = 5
                   )
@@ -445,8 +446,8 @@ ui <- dashboardPage(
               htmlOutput("key_insights")
             )
           )
-            )
-          ),
+        )
+      ),
       
       # Intervention Analysis Tab
       tabItem(
@@ -996,33 +997,42 @@ server <- function(input, output, session) {
   output$sensitivity_heatmap <- renderPlot({
     req(values$sensitivity_results)
     
-    sens_melted <- reshape2::melt(values$sensitivity_results$sensitivity_matrix)
-    names(sens_melted) <- c("From_Factor", "To_Factor", "Sensitivity")
-    sens_melted <- sens_melted[!is.na(sens_melted$Sensitivity), ]
-    
-    p <- ggplot(sens_melted, aes(x = To_Factor, y = From_Factor, fill = Sensitivity)) +
-      geom_tile(color = "white", size = 0.5) +
-      scale_fill_gradient2(low = "blue", mid = "white", high = "red",
-                           midpoint = 0, name = "Sensitivity") +
-      theme_minimal() +
-      theme(
-        axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
-        axis.text.y = element_text(size = 10),
-        plot.title = element_text(size = 14, face = "bold"),
-        legend.title = element_text(size = 12),
-        panel.grid = element_blank()
-      ) +
-      labs(
-        title = "Sensitivity Matrix: ∂λmax/∂aij",
-        x = "To Factor (j)",
-        y = "From Factor (i)"
-      )
-    
-    if (input$show_heatmap_values && nrow(values$matrix_A) <= 10) {
-      p <- p + geom_text(aes(label = round(Sensitivity, 3)), size = 3, color = "black")
-    }
-    
-    return(p)
+    tryCatch({
+      sens_melted <- reshape2::melt(values$sensitivity_results$sensitivity_matrix)
+      names(sens_melted) <- c("From_Factor", "To_Factor", "Sensitivity")
+      sens_melted <- sens_melted[!is.na(sens_melted$Sensitivity), ]
+      
+      p <- ggplot(sens_melted, aes(x = To_Factor, y = From_Factor, fill = Sensitivity)) +
+        geom_tile(color = "white", size = 0.5) +
+        scale_fill_gradient2(low = "blue", mid = "white", high = "red",
+                             midpoint = 0, name = "Sensitivity") +
+        theme_minimal() +
+        theme(
+          axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+          axis.text.y = element_text(size = 10),
+          plot.title = element_text(size = 14, face = "bold"),
+          legend.title = element_text(size = 12),
+          panel.grid = element_blank()
+        ) +
+        labs(
+          title = "Sensitivity Matrix: ∂λmax/∂aij",
+          x = "To Factor (j)",
+          y = "From Factor (i)"
+        )
+      
+      if (input$show_heatmap_values && nrow(values$matrix_A) <= 10) {
+        p <- p + geom_text(aes(label = round(Sensitivity, 3)), size = 3, color = "black")
+      }
+      
+      return(p)
+    }, error = function(e) {
+      ggplot() +
+        annotate("text", x = 0.5, y = 0.5, 
+                 label = paste("Sensitivity heatmap\nnot available:\n", e$message),
+                 size = 6, hjust = 0.5, vjust = 0.5) +
+        theme_void() +
+        labs(title = "Sensitivity Heatmap - Error")
+    })
   })
   
   # Output: DEMATEL Interrelationship Map
@@ -1045,101 +1055,140 @@ server <- function(input, output, session) {
   output$sensitivity_distribution <- renderPlot({
     req(values$sensitivity_results)
     
-    sens_values <- as.vector(values$sensitivity_results$sensitivity_matrix)
-    sens_values <- sens_values[!is.na(sens_values)]
-    
-    ggplot(data.frame(Sensitivity = sens_values), aes(x = Sensitivity)) +
-      geom_histogram(bins = 30, alpha = 0.7, fill = "steelblue", color = "white") +
-      geom_vline(xintercept = 0, color = "red", linetype = "dashed", size = 1) +
-      theme_minimal() +
-      theme(plot.title = element_text(size = 14, face = "bold")) +
-      labs(
-        title = "Distribution of Sensitivity Values",
-        subtitle = paste("Mean:", round(mean(sens_values), 4), "| SD:", round(sd(sens_values), 4)),
-        x = "Sensitivity Value",
-        y = "Frequency"
-      )
+    tryCatch({
+      sens_values <- as.vector(values$sensitivity_results$sensitivity_matrix)
+      sens_values <- sens_values[!is.na(sens_values)]
+      
+      ggplot(data.frame(Sensitivity = sens_values), aes(x = Sensitivity)) +
+        geom_histogram(bins = 30, alpha = 0.7, fill = "steelblue", color = "white") +
+        geom_vline(xintercept = 0, color = "red", linetype = "dashed", size = 1) +
+        theme_minimal() +
+        theme(plot.title = element_text(size = 14, face = "bold")) +
+        labs(
+          title = "Distribution of Sensitivity Values",
+          subtitle = paste("Mean:", round(mean(sens_values), 4), "| SD:", round(sd(sens_values), 4)),
+          x = "Sensitivity Value",
+          y = "Frequency"
+        )
+    }, error = function(e) {
+      ggplot() +
+        annotate("text", x = 0.5, y = 0.5, 
+                 label = paste("Distribution plot\nnot available:\n", e$message),
+                 size = 6, hjust = 0.5, vjust = 0.5) +
+        theme_void() +
+        labs(title = "Sensitivity Distribution - Error")
+    })
   })
   
   # Output: Top relationships plot
   output$top_relationships_plot <- renderPlot({
     req(values$sensitivity_results)
     
-    critical_rels <- identify_critical_relationships(values$sensitivity_results, 
-                                                     threshold_percentile = input$critical_threshold)
-    
-    if (nrow(critical_rels) > 0) {
-      top_10 <- head(critical_rels, 10)
-      top_10$relationship <- paste0(top_10$from_factor, " → ", top_10$to_factor)
-      top_10$relationship <- factor(top_10$relationship, levels = rev(top_10$relationship))
+    tryCatch({
+      critical_rels <- identify_critical_relationships(values$sensitivity_results, 
+                                                       threshold_percentile = input$critical_threshold)
       
-      ggplot(top_10, aes(x = relationship, y = sensitivity, fill = interpretation)) +
-        geom_col(alpha = 0.8) +
-        coord_flip() +
-        scale_fill_manual(
-          values = c("Amplifying" = "#E31A1C", "Dampening" = "#1F78B4"),
-          name = "Effect Type"
-        ) +
-        theme_minimal() +
-        theme(plot.title = element_text(size = 14, face = "bold")) +
-        labs(
-          title = paste("Top 10 Most Critical Relationships"),
-          subtitle = paste(input$critical_threshold, "th percentile threshold"),
-          x = "Relationship",
-          y = "Sensitivity Value"
-        ) +
-        geom_hline(yintercept = 0, color = "black", linetype = "solid", alpha = 0.3)
-    }
+      if (nrow(critical_rels) > 0) {
+        top_10 <- head(critical_rels, 10)
+        top_10$relationship <- paste0(top_10$from_factor, " → ", top_10$to_factor)
+        top_10$relationship <- factor(top_10$relationship, levels = rev(top_10$relationship))
+        
+        ggplot(top_10, aes(x = relationship, y = sensitivity, fill = interpretation)) +
+          geom_col(alpha = 0.8) +
+          coord_flip() +
+          scale_fill_manual(
+            values = c("Amplifying" = "#E31A1C", "Dampening" = "#1F78B4"),
+            name = "Effect Type"
+          ) +
+          theme_minimal() +
+          theme(plot.title = element_text(size = 14, face = "bold")) +
+          labs(
+            title = paste("Top 10 Most Critical Relationships"),
+            subtitle = paste(input$critical_threshold, "th percentile threshold"),
+            x = "Relationship",
+            y = "Sensitivity Value"
+          ) +
+          geom_hline(yintercept = 0, color = "black", linetype = "solid", alpha = 0.3)
+      } else {
+        ggplot() +
+          annotate("text", x = 0.5, y = 0.5, 
+                   label = "No critical relationships\nfound at this threshold",
+                   size = 6, hjust = 0.5, vjust = 0.5) +
+          theme_void() +
+          labs(title = "Top Critical Relationships")
+      }
+    }, error = function(e) {
+      ggplot() +
+        annotate("text", x = 0.5, y = 0.5, 
+                 label = paste("Critical relationships plot\nnot available:\n", e$message),
+                 size = 6, hjust = 0.5, vjust = 0.5) +
+        theme_void() +
+        labs(title = "Top Relationships - Error")
+    })
   })
   
   # Output: Critical relationships table
   output$critical_relationships_table <- DT::renderDataTable({
     req(values$sensitivity_results)
     
-    critical_rels <- identify_critical_relationships(values$sensitivity_results, 
-                                                     threshold_percentile = input$critical_threshold)
-    
-    if (nrow(critical_rels) > 0) {
-      display_data <- critical_rels[, c("from_factor", "to_factor", "sensitivity", 
-                                        "abs_sensitivity", "interpretation")]
-      names(display_data) <- c("From Factor", "To Factor", "Sensitivity", 
-                               "Abs. Sensitivity", "Effect Type")
+    tryCatch({
+      critical_rels <- identify_critical_relationships(values$sensitivity_results, 
+                                                       threshold_percentile = input$critical_threshold)
       
-      DT::datatable(
-        display_data,
-        options = list(
-          pageLength = 15,
-          scrollX = TRUE,
-          order = list(list(3, "desc"))  # Order by absolute sensitivity
-        )
-      ) %>%
-        DT::formatRound(columns = c("Sensitivity", "Abs. Sensitivity"), digits = 6) %>%
-        DT::formatStyle(
-          "Effect Type",
-          backgroundColor = DT::styleEqual(
-            c("Amplifying", "Dampening"),
-            c("#ffebee", "#e3f2fd")
+      if (nrow(critical_rels) > 0) {
+        display_data <- critical_rels[, c("from_factor", "to_factor", "sensitivity", 
+                                          "abs_sensitivity", "interpretation")]
+        names(display_data) <- c("From Factor", "To Factor", "Sensitivity", 
+                                 "Abs. Sensitivity", "Effect Type")
+        
+        DT::datatable(
+          display_data,
+          options = list(
+            pageLength = 15,
+            scrollX = TRUE,
+            order = list(list(3, "desc"))  # Order by absolute sensitivity
           )
-        )
-    }
+        ) %>%
+          DT::formatRound(columns = c("Sensitivity", "Abs. Sensitivity"), digits = 6) %>%
+          DT::formatStyle(
+            "Effect Type",
+            backgroundColor = DT::styleEqual(
+              c("Amplifying", "Dampening"),
+              c("#ffebee", "#e3f2fd")
+            )
+          )
+      } else {
+        DT::datatable(data.frame(Message = "No critical relationships found at this threshold"))
+      }
+    }, error = function(e) {
+      DT::datatable(data.frame(Error = paste("Error generating table:", e$message)))
+    })
   })
   
-  # Output: Network plot
-  output$network_plot <- renderPlot({
+  # Output: DEMATEL Network Plot
+  output$dematel_network_plot <- renderPlot({
     req(values$sensitivity_results)
     
     tryCatch({
-      plot_sensitivity_network(values$sensitivity_results, 
-                               threshold_percentile = input$critical_threshold,
-                               layout = input$network_layout)
+      # Use the correct function name from the visualization file
+      plot_dematel_network(values$sensitivity_results, 
+                           threshold_percentile = input$network_threshold,
+                           layout = input$network_layout)
     }, error = function(e) {
-      # Fallback network plot
-      ggplot() +
-        annotate("text", x = 0.5, y = 0.5, 
-                 label = paste("Network visualization\nnot available:\n", e$message),
-                 size = 6, hjust = 0.5, vjust = 0.5) +
-        theme_void() +
-        labs(title = "Network Plot - Error")
+      # Fallback: try the old function name for backwards compatibility
+      tryCatch({
+        plot_sensitivity_network(values$sensitivity_results, 
+                                 threshold_percentile = input$network_threshold,
+                                 layout = input$network_layout)
+      }, error = function(e2) {
+        # Create a simple fallback plot
+        ggplot() +
+          annotate("text", x = 0.5, y = 0.5, 
+                   label = paste("Network visualization\nnot available:\n", e$message),
+                   size = 6, hjust = 0.5, vjust = 0.5) +
+          theme_void() +
+          labs(title = "Network Plot - Error")
+      })
     })
   })
   
@@ -1147,263 +1196,288 @@ server <- function(input, output, session) {
   output$impact_summary <- renderText({
     req(values$sensitivity_results)
     
-    stats <- get_sensitivity_stats(values$sensitivity_results)
-    critical <- identify_critical_relationships(values$sensitivity_results, 
-                                                threshold_percentile = input$critical_threshold)
-    
-    paste(
-      "System Overview:\n",
-      "Total relationships:", stats$total_elements, "\n",
-      "Critical relationships (", input$critical_threshold, "th %):", nrow(critical), "\n",
-      "Max sensitivity:", round(stats$max, 4), "\n",
-      "Min sensitivity:", round(stats$min, 4), "\n\n",
+    tryCatch({
+      stats <- get_sensitivity_stats(values$sensitivity_results)
+      critical <- identify_critical_relationships(values$sensitivity_results, 
+                                                  threshold_percentile = input$critical_threshold)
       
-      "Impact Distribution:\n",
-      "High impact (>90th %):", nrow(identify_critical_relationships(values$sensitivity_results, 90)), "\n",
-      "Medium impact (70-90th %):", 
-      nrow(identify_critical_relationships(values$sensitivity_results, 70)) - 
-        nrow(identify_critical_relationships(values$sensitivity_results, 90)), "\n"
-    )
+      paste(
+        "System Overview:\n",
+        "Total relationships:", stats$total_elements, "\n",
+        "Critical relationships (", input$critical_threshold, "th %):", nrow(critical), "\n",
+        "Max sensitivity:", round(stats$max, 4), "\n",
+        "Min sensitivity:", round(stats$min, 4), "\n\n",
+        
+        "Impact Distribution:\n",
+        "High impact (>90th %):", nrow(identify_critical_relationships(values$sensitivity_results, 90)), "\n",
+        "Medium impact (70-90th %):", 
+        nrow(identify_critical_relationships(values$sensitivity_results, 70)) - 
+          nrow(identify_critical_relationships(values$sensitivity_results, 90)), "\n"
+      )
+    }, error = function(e) {
+      paste("Error generating impact summary:", e$message)
+    })
   })
   
   # Output: Key insights
   output$key_insights <- renderUI({
     req(values$sensitivity_results)
     
-    stats <- get_sensitivity_stats(values$sensitivity_results)
-    
-    insights <- character()
-    
-    if (stats$mean > 0) {
-      insights <- c(insights, "• System tends toward amplification (positive mean sensitivity)")
-    } else {
-      insights <- c(insights, "• System tends toward dampening (negative mean sensitivity)")
-    }
-    
-    if (stats$n_positive > stats$n_negative) {
-      insights <- c(insights, "• Majority of relationships are amplifying - monitor for cascading effects")
-    }
-    
-    if (stats$max > 2 * stats$mean_abs) {
-      insights <- c(insights, "• System contains highly sensitive relationships requiring careful management")
-    }
-    
-    if (length(insights) == 0) {
-      insights <- "• System shows balanced sensitivity characteristics"
-    }
-    
-    HTML(paste(insights, collapse = "<br>"))
+    tryCatch({
+      stats <- get_sensitivity_stats(values$sensitivity_results)
+      
+      insights <- character()
+      
+      if (stats$mean > 0) {
+        insights <- c(insights, "• System tends toward amplification (positive mean sensitivity)")
+      } else {
+        insights <- c(insights, "• System tends toward dampening (negative mean sensitivity)")
+      }
+      
+      if (stats$n_positive > stats$n_negative) {
+        insights <- c(insights, "• Majority of relationships are amplifying - monitor for cascading effects")
+      }
+      
+      if (stats$max > 2 * stats$mean_abs) {
+        insights <- c(insights, "• System contains highly sensitive relationships requiring careful management")
+      }
+      
+      if (length(insights) == 0) {
+        insights <- "• System shows balanced sensitivity characteristics"
+      }
+      
+      HTML(paste(insights, collapse = "<br>"))
+    }, error = function(e) {
+      HTML(paste("Error generating insights:", e$message))
+    })
   })
   
   # Output: Intervention table
   output$intervention_table <- DT::renderDataTable({
     req(values$intervention_results)
     
-    display_data <- head(values$intervention_results, input$max_interventions)
-    display_data <- display_data[, c("from_factor", "to_factor", "current_aij", 
-                                     "required_change", "new_aij", "efficiency", "feasible")]
-    
-    names(display_data) <- c("From Factor", "To Factor", "Current Value", 
-                             "Required Change", "New Value", "Efficiency", "Feasible")
-    
-    DT::datatable(
-      display_data,
-      options = list(
-        pageLength = 15,
-        scrollX = TRUE,
-        order = list(list(5, "desc"))  # Order by efficiency
-      )
-    ) %>%
-      DT::formatRound(columns = c("Current Value", "Required Change", "New Value", "Efficiency"), 
-                      digits = 4) %>%
-      DT::formatStyle(
-        "Feasible",
-        backgroundColor = DT::styleEqual(
-          c(TRUE, FALSE),
-          c("#d4edda", "#f8d7da")
+    tryCatch({
+      display_data <- head(values$intervention_results, input$max_interventions)
+      display_data <- display_data[, c("from_factor", "to_factor", "current_aij", 
+                                       "required_change", "new_aij", "efficiency", "feasible")]
+      
+      names(display_data) <- c("From Factor", "To Factor", "Current Value", 
+                               "Required Change", "New Value", "Efficiency", "Feasible")
+      
+      DT::datatable(
+        display_data,
+        options = list(
+          pageLength = 15,
+          scrollX = TRUE,
+          order = list(list(5, "desc"))  # Order by efficiency
         )
-      )
+      ) %>%
+        DT::formatRound(columns = c("Current Value", "Required Change", "New Value", "Efficiency"), 
+                        digits = 4) %>%
+        DT::formatStyle(
+          "Feasible",
+          backgroundColor = DT::styleEqual(
+            c(TRUE, FALSE),
+            c("#d4edda", "#f8d7da")
+          )
+        )
+    }, error = function(e) {
+      DT::datatable(data.frame(Error = paste("Error generating intervention table:", e$message)))
+    })
   })
   
   # Output: Intervention efficiency plot
   output$intervention_efficiency_plot <- renderPlot({
     req(values$intervention_results)
     
-    top_interventions <- head(values$intervention_results, input$max_interventions)
-    top_interventions$relationship <- paste0(top_interventions$from_factor, " → ", 
-                                             top_interventions$to_factor)
-    top_interventions$relationship <- factor(top_interventions$relationship, 
-                                             levels = rev(top_interventions$relationship))
-    
-    ggplot(top_interventions, aes(x = relationship, y = efficiency, fill = feasible)) +
-      geom_col(alpha = 0.8) +
-      coord_flip() +
-      scale_fill_manual(
-        values = c("TRUE" = "#28a745", "FALSE" = "#dc3545"),
-        name = "Feasible",
-        labels = c("FALSE" = "No", "TRUE" = "Yes")
-      ) +
-      theme_minimal() +
-      theme(
-        plot.title = element_text(size = 14, face = "bold"),
-        axis.text.y = element_text(size = 8)
-      ) +
-      labs(
-        title = "Intervention Efficiency Ranking",
-        subtitle = paste("Target λmax change:", input$target_lambda_change),
-        x = "Relationship",
-        y = "Efficiency (higher = better)"
-      )
+    tryCatch({
+      top_interventions <- head(values$intervention_results, input$max_interventions)
+      top_interventions$relationship <- paste0(top_interventions$from_factor, " → ", 
+                                               top_interventions$to_factor)
+      top_interventions$relationship <- factor(top_interventions$relationship, 
+                                               levels = rev(top_interventions$relationship))
+      
+      ggplot(top_interventions, aes(x = relationship, y = efficiency, fill = feasible)) +
+        geom_col(alpha = 0.8) +
+        coord_flip() +
+        scale_fill_manual(
+          values = c("TRUE" = "#28a745", "FALSE" = "#dc3545"),
+          name = "Feasible",
+          labels = c("FALSE" = "No", "TRUE" = "Yes")
+        ) +
+        theme_minimal() +
+        theme(
+          plot.title = element_text(size = 14, face = "bold"),
+          axis.text.y = element_text(size = 8)
+        ) +
+        labs(
+          title = "Intervention Efficiency Ranking",
+          subtitle = paste("Target λmax change:", input$target_lambda_change),
+          x = "Relationship",
+          y = "Efficiency (higher = better)"
+        )
+    }, error = function(e) {
+      ggplot() +
+        annotate("text", x = 0.5, y = 0.5, 
+                 label = paste("Efficiency plot\nnot available:\n", e$message),
+                 size = 6, hjust = 0.5, vjust = 0.5) +
+        theme_void() +
+        labs(title = "Intervention Efficiency - Error")
+    })
   })
   
   # Output: Comprehensive report
   output$comprehensive_report <- renderText({
     req(values$matrix_processed)
     
-    report_lines <- c()
-    
-    # Header
-    report_lines <- c(report_lines,
-                      "COMPREHENSIVE DEMATEL ANALYSIS REPORT",
-                      "=====================================",
-                      "",
-                      paste("Generated on:", Sys.time()),
-                      paste("System size:", nrow(values$matrix_A), "×", ncol(values$matrix_A)),
-                      ""
-    )
-    
-    # Spectral Analysis
-    if (!is.null(values$spectral_results)) {
+    tryCatch({
+      report_lines <- c()
+      
+      # Header
       report_lines <- c(report_lines,
-                        "SPECTRAL ANALYSIS RESULTS:",
-                        "-------------------------",
-                        paste("Dominant eigenvalue (λmax):", round(values$spectral_results$lambda_max, 6))
-      )
-      
-      if (values$spectral_results$lambda_max > 1) {
-        report_lines <- c(report_lines, "• System shows potential for influence amplification")
-      } else {
-        report_lines <- c(report_lines, "• System is stable with bounded influence")
-      }
-      
-      report_lines <- c(report_lines, "")
-    }
-    
-    # Sensitivity Analysis
-    if (!is.null(values$sensitivity_results)) {
-      stats <- get_sensitivity_stats(values$sensitivity_results)
-      critical_90 <- identify_critical_relationships(values$sensitivity_results, 90)
-      critical_95 <- identify_critical_relationships(values$sensitivity_results, 95)
-      
-      report_lines <- c(report_lines,
-                        "SENSITIVITY ANALYSIS RESULTS:",
-                        "-----------------------------",
-                        paste("Computation method:", values$sensitivity_results$computation_method),
+                        "COMPREHENSIVE DEMATEL ANALYSIS REPORT",
+                        "=====================================",
                         "",
-                        "Statistical Summary:",
-                        paste("  Mean sensitivity:", round(stats$mean, 6)),
-                        paste("  Standard deviation:", round(stats$sd, 6)),
-                        paste("  Range: [", round(stats$min, 6), ",", round(stats$max, 6), "]"),
-                        paste("  Mean absolute sensitivity:", round(stats$mean_abs, 6)),
-                        "",
-                        "Relationship Classification:",
-                        paste("  Amplifying relationships:", stats$n_positive),
-                        paste("  Dampening relationships:", stats$n_negative),
-                        paste("  Near-zero relationships:", stats$n_zero),
-                        "",
-                        "Critical Relationships:",
-                        paste("  90th percentile threshold:", nrow(critical_90), "relationships"),
-                        paste("  95th percentile threshold:", nrow(critical_95), "relationships")
-      )
-      
-      if (nrow(critical_95) > 0) {
-        report_lines <- c(report_lines,
-                          "",
-                          "Top 5 Most Critical Relationships (95th percentile):"
-        )
-        
-        top_5 <- head(critical_95, 5)
-        for (i in 1:nrow(top_5)) {
-          report_lines <- c(report_lines,
-                            paste("  ", i, ".", top_5$from_factor[i], "→", top_5$to_factor[i],
-                                  ":", round(top_5$sensitivity[i], 6), "(", top_5$interpretation[i], ")")
-          )
-        }
-      }
-      
-      report_lines <- c(report_lines, "")
-    }
-    
-    # Intervention Analysis
-    if (!is.null(values$intervention_results)) {
-      report_lines <- c(report_lines,
-                        "INTERVENTION ANALYSIS RESULTS:",
-                        "------------------------------",
-                        paste("Target λmax change:", input$target_lambda_change),
-                        paste("Total interventions analyzed:", nrow(values$intervention_results)),
-                        paste("Feasible interventions:", sum(values$intervention_results$feasible)),
+                        paste("Generated on:", Sys.time()),
+                        paste("System size:", nrow(values$matrix_A), "×", ncol(values$matrix_A)),
                         ""
       )
       
-      if (nrow(values$intervention_results) > 0) {
-        top_3 <- head(values$intervention_results, 3)
+      # Spectral Analysis
+      if (!is.null(values$spectral_results)) {
         report_lines <- c(report_lines,
-                          "Top 3 Most Efficient Interventions:"
+                          "SPECTRAL ANALYSIS RESULTS:",
+                          "-------------------------",
+                          paste("Dominant eigenvalue (λmax):", round(values$spectral_results$lambda_max, 6))
         )
         
-        for (i in 1:nrow(top_3)) {
+        if (values$spectral_results$lambda_max > 1) {
+          report_lines <- c(report_lines, "• System shows potential for influence amplification")
+        } else {
+          report_lines <- c(report_lines, "• System is stable with bounded influence")
+        }
+        
+        report_lines <- c(report_lines, "")
+      }
+      
+      # Sensitivity Analysis
+      if (!is.null(values$sensitivity_results)) {
+        stats <- get_sensitivity_stats(values$sensitivity_results)
+        critical_90 <- identify_critical_relationships(values$sensitivity_results, 90)
+        critical_95 <- identify_critical_relationships(values$sensitivity_results, 95)
+        
+        report_lines <- c(report_lines,
+                          "SENSITIVITY ANALYSIS RESULTS:",
+                          "-----------------------------",
+                          paste("Computation method:", values$sensitivity_results$computation_method),
+                          "",
+                          "Statistical Summary:",
+                          paste("  Mean sensitivity:", round(stats$mean, 6)),
+                          paste("  Standard deviation:", round(stats$sd, 6)),
+                          paste("  Range: [", round(stats$min, 6), ",", round(stats$max, 6), "]"),
+                          paste("  Mean absolute sensitivity:", round(stats$mean_abs, 6)),
+                          "",
+                          "Relationship Classification:",
+                          paste("  Amplifying relationships:", stats$n_positive),
+                          paste("  Dampening relationships:", stats$n_negative),
+                          paste("  Near-zero relationships:", stats$n_zero),
+                          "",
+                          "Critical Relationships:",
+                          paste("  90th percentile threshold:", nrow(critical_90), "relationships"),
+                          paste("  95th percentile threshold:", nrow(critical_95), "relationships")
+        )
+        
+        if (nrow(critical_95) > 0) {
           report_lines <- c(report_lines,
-                            paste("  ", i, ".", top_3$from_factor[i], "→", top_3$to_factor[i],
-                                  ": Change by", round(top_3$required_change[i], 4),
-                                  "(Efficiency:", round(top_3$efficiency[i], 4), ")")
+                            "",
+                            "Top 5 Most Critical Relationships (95th percentile):"
+          )
+          
+          top_5 <- head(critical_95, 5)
+          for (i in 1:nrow(top_5)) {
+            report_lines <- c(report_lines,
+                              paste("  ", i, ".", top_5$from_factor[i], "→", top_5$to_factor[i],
+                                    ":", round(top_5$sensitivity[i], 6), "(", top_5$interpretation[i], ")")
+            )
+          }
+        }
+        
+        report_lines <- c(report_lines, "")
+      }
+      
+      # Intervention Analysis
+      if (!is.null(values$intervention_results)) {
+        report_lines <- c(report_lines,
+                          "INTERVENTION ANALYSIS RESULTS:",
+                          "------------------------------",
+                          paste("Target λmax change:", input$target_lambda_change),
+                          paste("Total interventions analyzed:", nrow(values$intervention_results)),
+                          paste("Feasible interventions:", sum(values$intervention_results$feasible)),
+                          ""
+        )
+        
+        if (nrow(values$intervention_results) > 0) {
+          top_3 <- head(values$intervention_results, 3)
+          report_lines <- c(report_lines,
+                            "Top 3 Most Efficient Interventions:"
+          )
+          
+          for (i in 1:nrow(top_3)) {
+            report_lines <- c(report_lines,
+                              paste("  ", i, ".", top_3$from_factor[i], "→", top_3$to_factor[i],
+                                    ": Change by", round(top_3$required_change[i], 4),
+                                    "(Efficiency:", round(top_3$efficiency[i], 4), ")")
+            )
+          }
+        }
+        
+        report_lines <- c(report_lines, "")
+      }
+      
+      # System Insights
+      if (!is.null(values$sensitivity_results)) {
+        stats <- get_sensitivity_stats(values$sensitivity_results)
+        
+        report_lines <- c(report_lines,
+                          "SYSTEM INSIGHTS AND RECOMMENDATIONS:",
+                          "------------------------------------"
+        )
+        
+        if (stats$mean > 0) {
+          report_lines <- c(report_lines,
+                            "• System shows overall amplifying tendency (positive mean sensitivity)"
+          )
+        } else {
+          report_lines <- c(report_lines,
+                            "• System shows overall dampening tendency (negative mean sensitivity)"
           )
         }
+        
+        if (stats$max > 2 * stats$mean_abs) {
+          report_lines <- c(report_lines,
+                            "• System contains highly sensitive relationships requiring careful management"
+          )
+        }
+        
+        if (stats$n_positive > stats$n_negative) {
+          report_lines <- c(report_lines,
+                            "• Majority of relationships are amplifying - monitor for cascading effects"
+          )
+        }
+        
+        report_lines <- c(report_lines, "")
       }
       
-      report_lines <- c(report_lines, "")
-    }
-    
-    # System Insights
-    if (!is.null(values$sensitivity_results)) {
-      stats <- get_sensitivity_stats(values$sensitivity_results)
-      
+      # Footer
       report_lines <- c(report_lines,
-                        "SYSTEM INSIGHTS AND RECOMMENDATIONS:",
-                        "------------------------------------"
+                        "---",
+                        "Report generated by DEMATEL Sensitivity Analysis Shiny App"
       )
       
-      if (stats$mean > 0) {
-        report_lines <- c(report_lines,
-                          "• System shows overall amplifying tendency (positive mean sensitivity)"
-        )
-      } else {
-        report_lines <- c(report_lines,
-                          "• System shows overall dampening tendency (negative mean sensitivity)"
-        )
-      }
-      
-      if (stats$max > 2 * stats$mean_abs) {
-        report_lines <- c(report_lines,
-                          "• System contains highly sensitive relationships requiring careful management"
-        )
-      }
-      
-      if (stats$n_positive > stats$n_negative) {
-        report_lines <- c(report_lines,
-                          "• Majority of relationships are amplifying - monitor for cascading effects"
-        )
-      }
-      
-      report_lines <- c(report_lines, "")
-    }
-    
-    # Footer
-    report_lines <- c(report_lines,
-                      "---",
-                      "Report generated by DEMATEL Sensitivity Analysis Shiny App"
-    )
-    
-    return(paste(report_lines, collapse = "\n"))
+      return(paste(report_lines, collapse = "\n"))
+    }, error = function(e) {
+      paste("Error generating comprehensive report:", e$message)
+    })
   })
   
   # Download handlers
@@ -1412,18 +1486,22 @@ server <- function(input, output, session) {
       paste0("spectral_results_", Sys.Date(), ".csv")
     },
     content = function(file) {
-      if (!is.null(values$spectral_results)) {
-        spectral_data <- data.frame(
-          Metric = c("Dominant_Eigenvalue", "System_Size", "Matrix_Min", "Matrix_Max"),
-          Value = c(
-            values$spectral_results$lambda_max,
-            nrow(values$matrix_A),
-            min(values$matrix_A),
-            max(values$matrix_A)
+      tryCatch({
+        if (!is.null(values$spectral_results)) {
+          spectral_data <- data.frame(
+            Metric = c("Dominant_Eigenvalue", "System_Size", "Matrix_Min", "Matrix_Max"),
+            Value = c(
+              values$spectral_results$lambda_max,
+              nrow(values$matrix_A),
+              min(values$matrix_A),
+              max(values$matrix_A)
+            )
           )
-        )
-        write.csv(spectral_data, file, row.names = FALSE)
-      }
+          write.csv(spectral_data, file, row.names = FALSE)
+        }
+      }, error = function(e) {
+        write.csv(data.frame(Error = paste("Download failed:", e$message)), file)
+      })
     }
   )
   
@@ -1432,11 +1510,15 @@ server <- function(input, output, session) {
       paste0("critical_relationships_", Sys.Date(), ".csv")
     },
     content = function(file) {
-      if (!is.null(values$sensitivity_results)) {
-        critical_rels <- identify_critical_relationships(values$sensitivity_results, 
-                                                         threshold_percentile = input$critical_threshold)
-        write.csv(critical_rels, file, row.names = FALSE)
-      }
+      tryCatch({
+        if (!is.null(values$sensitivity_results)) {
+          critical_rels <- identify_critical_relationships(values$sensitivity_results, 
+                                                           threshold_percentile = input$critical_threshold)
+          write.csv(critical_rels, file, row.names = FALSE)
+        }
+      }, error = function(e) {
+        write.csv(data.frame(Error = paste("Download failed:", e$message)), file)
+      })
     }
   )
   
@@ -1445,9 +1527,13 @@ server <- function(input, output, session) {
       paste0("intervention_analysis_", Sys.Date(), ".csv")
     },
     content = function(file) {
-      if (!is.null(values$intervention_results)) {
-        write.csv(values$intervention_results, file, row.names = FALSE)
-      }
+      tryCatch({
+        if (!is.null(values$intervention_results)) {
+          write.csv(values$intervention_results, file, row.names = FALSE)
+        }
+      }, error = function(e) {
+        write.csv(data.frame(Error = paste("Download failed:", e$message)), file)
+      })
     }
   )
   
@@ -1456,8 +1542,12 @@ server <- function(input, output, session) {
       paste0("dematel_comprehensive_report_", Sys.Date(), ".txt")
     },
     content = function(file) {
-      report_text <- output$comprehensive_report()
-      writeLines(report_text, file)
+      tryCatch({
+        report_text <- output$comprehensive_report()
+        writeLines(report_text, file)
+      }, error = function(e) {
+        writeLines(paste("Report generation failed:", e$message), file)
+      })
     }
   )
   

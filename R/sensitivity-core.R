@@ -191,6 +191,101 @@ compute_sensitivity_numerical.DEMATEL_Sensitivity <- function(obj, epsilon = 0.0
   return(obj)
 }
 
+#' Check Assumptions for Theorem 1
+#'
+#' Verifies that the conditions required for Theorem 1 are satisfied:
+#' 1. The dominant eigenvalue λmax is simple (non-repeated)
+#' 2. The matrix D is irreducible (strongly connected influence graph)
+#' 3. The system matrices are well-conditioned
+#'
+#' @param obj DEMATEL_Sensitivity object
+#' @param tolerance Numerical tolerance for eigenvalue multiplicity check
+#'
+#' @return List with validity status and diagnostic information
+#' @keywords internal
+check_theorem1_assumptions <- function(obj, tolerance = 1e-10) {
+  
+  result <- list(
+    valid = FALSE,
+    message = "",
+    dominant_is_simple = FALSE,
+    matrix_is_irreducible = FALSE,
+    well_conditioned = FALSE,
+    eigenvalue_gaps = NULL,
+    condition_number = NULL
+  )
+  
+  tryCatch({
+    # Check 1: Dominant eigenvalue is simple (non-repeated)
+    eigenvalues <- eigen(obj$T, only.values = TRUE)$values
+    eigenvalues_real <- Re(eigenvalues)
+    
+    # Sort eigenvalues by magnitude
+    sorted_eigenvalues <- sort(eigenvalues_real, decreasing = TRUE)
+    lambda_max <- sorted_eigenvalues[1]
+    
+    # Check if dominant eigenvalue is simple
+    multiplicity <- sum(abs(eigenvalues_real - lambda_max) < tolerance)
+    if (multiplicity == 1) {
+      result$dominant_is_simple <- TRUE
+    } else {
+      result$message <- paste("Dominant eigenvalue has multiplicity", multiplicity, 
+                              "(should be 1 for simple eigenvalue)")
+      return(result)
+    }
+    
+    # Store eigenvalue gaps for diagnostics
+    if (length(sorted_eigenvalues) > 1) {
+      result$eigenvalue_gaps <- sorted_eigenvalues[1] - sorted_eigenvalues[2]
+    }
+    
+    # Check 2: Matrix D is irreducible (strongly connected)
+    # A matrix is irreducible if (I + |D|)^(n-1) has all positive entries
+    D_abs <- abs(obj$D)
+    n <- nrow(D_abs)
+    I <- diag(n)
+    
+    # Compute (I + |D|)^(n-1)
+    power_matrix <- I + D_abs
+    if (n > 1) {
+      for (k in 2:(n-1)) {
+        power_matrix <- power_matrix %*% (I + D_abs)
+      }
+    }
+    
+    # Check if all entries are positive (accounting for numerical precision)
+    if (all(power_matrix > tolerance)) {
+      result$matrix_is_irreducible <- TRUE
+    } else {
+      result$message <- "Matrix D is not irreducible (influence graph not strongly connected)"
+      return(result)
+    }
+    
+    # Check 3: System is well-conditioned
+    # Check condition number of (I - D)
+    I_minus_D <- I - obj$D
+    condition_num <- kappa(I_minus_D)
+    result$condition_number <- condition_num
+    
+    if (condition_num < 1e12) {  # Reasonable threshold
+      result$well_conditioned <- TRUE
+    } else {
+      result$message <- paste("System is ill-conditioned (κ =", 
+                              format(condition_num, scientific = TRUE), ")")
+      return(result)
+    }
+    
+    # All checks passed
+    result$valid <- TRUE
+    result$message <- "All Theorem 1 assumptions satisfied"
+    
+  }, error = function(e) {
+    result$message <- paste("Error checking assumptions:", e$message)
+  })
+  
+  return(result)
+}
+
 #' Compute Analytical Sensitivity Matrix
 #'
 #' Computes the sensitivity matrix using analytical differentiation
@@ -218,77 +313,174 @@ compute_sensitivity_analytical <- function(obj) {
 #' @export
 compute_sensitivity_analytical.DEMATEL_Sensitivity <- function(obj) {
   n <- obj$n
-
+  
+  # Check assumptions for Theorem 1
+  assumption_check <- check_theorem1_assumptions(obj)
+  if (!assumption_check$valid) {
+    warning(paste("Theorem 1 assumptions not satisfied:", assumption_check$message,
+                  "\nFalling back to numerical method."))
+    return(compute_sensitivity_numerical(obj))
+  }
+  
+  cat("Theorem 1 assumptions satisfied. Computing analytical sensitivity...\n")
+  
   tryCatch({
-    # Get eigenvectors
+    # Get eigendecomposition of T
     eigen_result <- eigen(obj$T)
-    max_idx <- which.max(Re(eigen_result$values))
-
-    # Right eigenvector
-    u <- Re(eigen_result$vectors[, max_idx])
-    u <- u / sqrt(sum(u^2))  # Normalize
-
-    # Left eigenvector (for non-symmetric matrices)
-    eigen_result_T <- eigen(t(obj$T))
-    max_idx_T <- which.max(Re(eigen_result_T$values))
-    v <- Re(eigen_result_T$vectors[, max_idx_T])
-
-    # Normalize so that v^T u = 1
-    normalization_factor <- as.numeric(t(v) %*% u)
-    if (abs(normalization_factor) < 1e-12) {
-      stop("Cannot normalize eigenvectors - they may be orthogonal")
+    eigenvalues <- eigen_result$values
+    
+    # Find dominant eigenvalue (real part)
+    dominant_idx <- which.max(Re(eigenvalues))
+    lambda_max <- Re(eigenvalues[dominant_idx])
+    
+    # Verify this matches our stored lambda_max
+    if (abs(lambda_max - obj$lambda_max) > 1e-10) {
+      warning("Eigenvalue mismatch detected")
     }
-    v <- v / normalization_factor
-
+    
+    # Get right eigenvector u
+    u <- Re(eigen_result$vectors[, dominant_idx])
+    
+    # Get left eigenvector v (eigenvector of T^T)
+    eigen_result_T <- eigen(t(obj$T))
+    left_dominant_idx <- which.max(Re(eigen_result_T$values))
+    v <- Re(eigen_result_T$vectors[, left_dominant_idx])
+    
+    # Normalize eigenvectors so that v^T u = 1 (as required by theorem)
+    inner_product <- as.numeric(t(v) %*% u)
+    if (abs(inner_product) < 1e-12) {
+      stop("Left and right eigenvectors are orthogonal - cannot normalize")
+    }
+    v <- v / inner_product
+    
+    # Verify normalization
+    if (abs(t(v) %*% u - 1) > 1e-10) {
+      warning("Eigenvector normalization failed")
+    }
+    
+    # Get scaling factor s from normalization
+    s <- max(max(rowSums(obj$A)), max(colSums(obj$A)))
+    if (s == 0) {
+      stop("Scaling factor is zero")
+    }
+    
+    # Precompute (I + T)^2 for efficiency
+    I <- diag(n)
+    I_plus_T_squared <- (I + obj$T) %*% (I + obj$T)
+    
+    # Apply Theorem 1: ∂λmax/∂aij = (1/s) * v^T * (I + T)^2 * E_ij * u
     sensitivity_matrix <- matrix(0, nrow = n, ncol = n)
-
-    cat("Computing sensitivity matrix using analytical method...\n")
+    
+    cat("Applying Theorem 1 formula...\n")
     pb <- txtProgressBar(min = 0, max = n^2, style = 3)
-
+    
     for (i in 1:n) {
       for (j in 1:n) {
-        # Compute dT/da_ij using finite differences for chain rule
-        dT_daij <- compute_dT_daij(obj, i, j)
-        sensitivity_matrix[i, j] <- as.numeric(t(v) %*% dT_daij %*% u)
-
+        # Create elementary matrix E_ij
+        E_ij <- matrix(0, nrow = n, ncol = n)
+        E_ij[i, j] <- 1
+        
+        # Apply Theorem 1 formula
+        sensitivity_matrix[i, j] <- (1/s) * as.numeric(t(v) %*% I_plus_T_squared %*% E_ij %*% u)
+        
         setTxtProgressBar(pb, (i-1)*n + j)
       }
     }
     close(pb)
-
+    
     # Add row and column names
     rownames(sensitivity_matrix) <- obj$factor_names
     colnames(sensitivity_matrix) <- obj$factor_names
-
+    
     obj$sensitivity_matrix <- sensitivity_matrix
-    obj$computation_method <- "analytical"
-
-    cat("\nAnalytical sensitivity matrix computation completed.\n")
-
+    obj$computation_method <- "analytical_theorem1"
+    obj$assumptions_check <- assumption_check
+    
+    cat("\nTheorem 1 analytical sensitivity computation completed.\n")
+    
     return(obj)
-
+    
   }, error = function(e) {
-    warning("Analytical method failed, falling back to numerical method: ", e$message)
+    warning(paste("Theorem 1 analytical method failed:", e$message, 
+                  "\nFalling back to numerical method."))
     return(compute_sensitivity_numerical(obj))
   })
 }
 
-#' Compute Derivative of T Matrix
-#'
-#' Helper function to compute dT/da_ij using finite differences
-#'
-#' @param obj DEMATEL_Sensitivity object
-#' @param i Row index
-#' @param j Column index
-#' @param epsilon Step size for finite differences
-#' @return Matrix representing dT/da_ij
-#' @keywords internal
-compute_dT_daij <- function(obj, i, j, epsilon = 1e-8) {
-  A_pert <- obj$A
-  A_pert[i, j] <- A_pert[i, j] + epsilon
+#' #' @export
+#' compute_sensitivity_analytical.DEMATEL_Sensitivity <- function(obj) {
+#'   n <- obj$n
+#' 
+#'   tryCatch({
+#'     # Get eigenvectors
+#'     eigen_result <- eigen(obj$T)
+#'     max_idx <- which.max(Re(eigen_result$values))
+#' 
+#'     # Right eigenvector
+#'     u <- Re(eigen_result$vectors[, max_idx])
+#'     u <- u / sqrt(sum(u^2))  # Normalize
+#' 
+#'     # Left eigenvector (for non-symmetric matrices)
+#'     eigen_result_T <- eigen(t(obj$T))
+#'     max_idx_T <- which.max(Re(eigen_result_T$values))
+#'     v <- Re(eigen_result_T$vectors[, max_idx_T])
+#' 
+#'     # Normalize so that v^T u = 1
+#'     normalization_factor <- as.numeric(t(v) %*% u)
+#'     if (abs(normalization_factor) < 1e-12) {
+#'       stop("Cannot normalize eigenvectors - they may be orthogonal")
+#'     }
+#'     v <- v / normalization_factor
+#' 
+#'     sensitivity_matrix <- matrix(0, nrow = n, ncol = n)
+#' 
+#'     cat("Computing sensitivity matrix using analytical method...\n")
+#'     pb <- txtProgressBar(min = 0, max = n^2, style = 3)
+#' 
+#'     for (i in 1:n) {
+#'       for (j in 1:n) {
+#'         # Compute dT/da_ij using finite differences for chain rule
+#'         dT_daij <- compute_dT_daij(obj, i, j)
+#'         sensitivity_matrix[i, j] <- as.numeric(t(v) %*% dT_daij %*% u)
+#' 
+#'         setTxtProgressBar(pb, (i-1)*n + j)
+#'       }
+#'     }
+#'     close(pb)
+#' 
+#'     # Add row and column names
+#'     rownames(sensitivity_matrix) <- obj$factor_names
+#'     colnames(sensitivity_matrix) <- obj$factor_names
+#' 
+#'     obj$sensitivity_matrix <- sensitivity_matrix
+#'     obj$computation_method <- "analytical"
+#' 
+#'     cat("\nAnalytical sensitivity matrix computation completed.\n")
+#' 
+#'     return(obj)
+#' 
+#'   }, error = function(e) {
+#'     warning("Analytical method failed, falling back to numerical method: ", e$message)
+#'     return(compute_sensitivity_numerical(obj))
+#'   })
+#' }
 
-  dematel_pert <- compute_dematel_matrices(A_pert)
-  dT_daij <- (dematel_pert$T - obj$T) / epsilon
-
-  return(dT_daij)
-}
+#' #' Compute Derivative of T Matrix
+#' #'
+#' #' Helper function to compute dT/da_ij using finite differences
+#' #'
+#' #' @param obj DEMATEL_Sensitivity object
+#' #' @param i Row index
+#' #' @param j Column index
+#' #' @param epsilon Step size for finite differences
+#' #' @return Matrix representing dT/da_ij
+#' #' @keywords internal
+#' compute_dT_daij <- function(obj, i, j, epsilon = 1e-8) {
+#'   A_pert <- obj$A
+#'   A_pert[i, j] <- A_pert[i, j] + epsilon
+#' 
+#'   dematel_pert <- compute_dematel_matrices(A_pert)
+#'   dT_daij <- (dematel_pert$T - obj$T) / epsilon
+#' 
+#'   return(dT_daij)
+#' }

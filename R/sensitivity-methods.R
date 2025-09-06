@@ -205,7 +205,6 @@ get_sensitivity_stats.DEMATEL_Sensitivity <- function(obj) {
 
   return(stats)
 }
-
 #' Print Method for DEMATEL_Sensitivity
 #'
 #' @param x DEMATEL_Sensitivity object
@@ -218,11 +217,24 @@ print.DEMATEL_Sensitivity <- function(x, ...) {
   cat(sprintf("Number of factors: %d\n", x$n))
   cat(sprintf("Factor names: %s\n", paste(x$factor_names, collapse = ", ")))
   cat(sprintf("Dominant eigenvalue (λmax): %.6f\n", x$lambda_max))
-
+  
   if (!is.null(x$sensitivity_matrix)) {
     cat(sprintf("Sensitivity matrix: Computed (%s method)\n", x$computation_method %||% "unknown"))
-
+    
+    # Show assumption check results if available
+    if (!is.null(x$assumptions_check)) {
+      cat("\nTheorem 1 Assumptions:\n")
+      cat(sprintf("  Status: %s\n", ifelse(x$assumptions_check$valid, "✓ Satisfied", "✗ Not satisfied")))
+      if (!is.null(x$assumptions_check$eigenvalue_gaps)) {
+        cat(sprintf("  Eigenvalue gap: %.6f\n", x$assumptions_check$eigenvalue_gaps))
+      }
+      if (!is.null(x$assumptions_check$condition_number)) {
+        cat(sprintf("  Condition number: %.2e\n", x$assumptions_check$condition_number))
+      }
+    }
+    
     stats <- get_sensitivity_stats(x)
+    cat(sprintf("\nSensitivity Statistics:\n"))
     cat(sprintf("  Range: [%.6f, %.6f]\n", stats$min, stats$max))
     cat(sprintf("  Mean absolute sensitivity: %.6f\n", stats$mean_abs))
     cat(sprintf("  Amplifying relationships: %d\n", stats$n_positive))
@@ -231,9 +243,37 @@ print.DEMATEL_Sensitivity <- function(x, ...) {
     cat("Sensitivity matrix: Not computed\n")
     cat("Use compute_sensitivity_numerical() or compute_sensitivity_analytical()\n")
   }
-
+  
   invisible(x)
 }
+#' #' Print Method for DEMATEL_Sensitivity
+#' #'
+#' #' @param x DEMATEL_Sensitivity object
+#' #' @param ... Additional arguments (not used)
+#' #'
+#' #' @export
+#' print.DEMATEL_Sensitivity <- function(x, ...) {
+#'   cat("DEMATEL Sensitivity Analysis Object\n")
+#'   cat("===================================\n")
+#'   cat(sprintf("Number of factors: %d\n", x$n))
+#'   cat(sprintf("Factor names: %s\n", paste(x$factor_names, collapse = ", ")))
+#'   cat(sprintf("Dominant eigenvalue (λmax): %.6f\n", x$lambda_max))
+#' 
+#'   if (!is.null(x$sensitivity_matrix)) {
+#'     cat(sprintf("Sensitivity matrix: Computed (%s method)\n", x$computation_method %||% "unknown"))
+#' 
+#'     stats <- get_sensitivity_stats(x)
+#'     cat(sprintf("  Range: [%.6f, %.6f]\n", stats$min, stats$max))
+#'     cat(sprintf("  Mean absolute sensitivity: %.6f\n", stats$mean_abs))
+#'     cat(sprintf("  Amplifying relationships: %d\n", stats$n_positive))
+#'     cat(sprintf("  Dampening relationships: %d\n", stats$n_negative))
+#'   } else {
+#'     cat("Sensitivity matrix: Not computed\n")
+#'     cat("Use compute_sensitivity_numerical() or compute_sensitivity_analytical()\n")
+#'   }
+#' 
+#'   invisible(x)
+#' }
 
 #' Summary Method for DEMATEL_Sensitivity
 #'

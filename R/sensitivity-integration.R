@@ -39,9 +39,7 @@
 #' @export
 analyze_dematel_files_enhanced <- function(d_file, t_file, case_name = NULL,
                                            header = FALSE, verbose = TRUE,
-                                           include_sensitivity = FALSE,
-                                           sensitivity_method = "numerical",
-                                           sensitivity_epsilon = 0.01) {
+                                           include_sensitivity = FALSE) {
 
   # Input validation
   if (!file.exists(d_file)) {
@@ -51,9 +49,9 @@ analyze_dematel_files_enhanced <- function(d_file, t_file, case_name = NULL,
     stop("T matrix file not found: ", t_file)
   }
 
-  if (!sensitivity_method %in% c("numerical", "analytical")) {
-    stop("sensitivity_method must be 'numerical' or 'analytical'")
-  }
+  # if (!sensitivity_method %in% c("numerical", "analytical")) {
+  #   stop("sensitivity_method must be 'numerical' or 'analytical'")
+  # }
 
   if (verbose) {
     cat("Enhanced DEMATEL Analysis\n")
@@ -141,13 +139,14 @@ analyze_dematel_files_enhanced <- function(d_file, t_file, case_name = NULL,
     # Create sensitivity analysis object
     sensitivity_obj <- DEMATEL_Sensitivity(A_reconstructed, factor_names)
 
-    # Compute sensitivity matrix
-    if (sensitivity_method == "numerical") {
-      sensitivity_obj <- compute_sensitivity_numerical(sensitivity_obj, epsilon = sensitivity_epsilon)
-    } else {
-      sensitivity_obj <- compute_sensitivity_analytical(sensitivity_obj)
-    }
-
+    # # Compute sensitivity matrix
+    # if (sensitivity_method == "numerical") {
+    #   sensitivity_obj <- compute_sensitivity_numerical(sensitivity_obj, epsilon = sensitivity_epsilon)
+    # } else {
+    #   sensitivity_obj <- compute_sensitivity_analytical(sensitivity_obj)
+    # }
+    # Compute analytical sensitivity matrix
+    sensitivity_obj <- compute_sensitivity_analytical(sensitivity_obj)
     sensitivity_results <- sensitivity_obj
 
     if (verbose) {

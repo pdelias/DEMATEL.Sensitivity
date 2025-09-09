@@ -219,7 +219,7 @@ print.DEMATEL_Sensitivity <- function(x, ...) {
   cat(sprintf("Dominant eigenvalue (λmax): %.6f\n", x$lambda_max))
   
   if (!is.null(x$sensitivity_matrix)) {
-    cat(sprintf("Sensitivity matrix: Computed (%s method)\n", x$computation_method %||% "unknown"))
+    cat(sprintf("Sensitivity matrix: Computed (analytical method)\n"))
     
     # Show assumption check results if available
     if (!is.null(x$assumptions_check)) {

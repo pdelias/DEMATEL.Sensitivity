@@ -227,29 +227,33 @@ ui <- dashboardPage(
               width = 4,
               
               h4("Analysis Parameters:"),
+              # Fixed to analytical method only
+              h4("Computation Method: Analytical"),
+              p("Using eigenvalue perturbation theory for precise sensitivity calculation.", 
+                style = "color: #666; font-style: italic;"),
               
-              radioButtons(
-                "sensitivity_method",
-                "Computation Method:",
-                choices = list(
-                  "Numerical (Robust)" = "numerical",
-                  "Analytical (Fast)" = "analytical"
-                ),
-                selected = "numerical"
-              ),
-              
-              conditionalPanel(
-                condition = "input.sensitivity_method == 'numerical'",
-                numericInput(
-                  "sensitivity_epsilon",
-                  "Step Size (ε):",
-                  value = 0.01,
-                  min = 0.001,
-                  max = 0.1,
-                  step = 0.001
-                ),
-                helpText("Smaller values = more accurate but slower computation")
-              ),
+              # radioButtons(
+              #   "sensitivity_method",
+              #   "Computation Method:",
+              #   choices = list(
+              #     "Numerical (Robust)" = "numerical",
+              #     "Analytical (Fast)" = "analytical"
+              #   ),
+              #   selected = "numerical"
+              # ),
+              # 
+              # conditionalPanel(
+              #   condition = "input.sensitivity_method == 'numerical'",
+              #   numericInput(
+              #     "sensitivity_epsilon",
+              #     "Step Size (ε):",
+              #     value = 0.01,
+              #     min = 0.001,
+              #     max = 0.1,
+              #     step = 0.001
+              #   ),
+              #   helpText("Smaller values = more accurate but slower computation")
+              # ),
               
               br(),
               actionButton(
@@ -818,11 +822,13 @@ server <- function(input, output, session) {
         sens_obj <- DEMATEL_Sensitivity(values$matrix_A, values$factor_names)
         
         # Compute sensitivity
-        if (input$sensitivity_method == "numerical") {
-          sens_obj <- compute_sensitivity_numerical(sens_obj, epsilon = input$sensitivity_epsilon)
-        } else {
-          sens_obj <- compute_sensitivity_analytical(sens_obj)
-        }
+        # if (input$sensitivity_method == "numerical") {
+        #   sens_obj <- compute_sensitivity_numerical(sens_obj, epsilon = input$sensitivity_epsilon)
+        # } else {
+        #   sens_obj <- compute_sensitivity_analytical(sens_obj)
+        # }
+        # Compute analytical sensitivity only
+        sens_obj <- compute_sensitivity_analytical(sens_obj)
         
         values$sensitivity_results <- sens_obj
         values$sensitivity_computed <- TRUE

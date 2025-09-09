@@ -84,7 +84,7 @@ if (length(syntax_errors) > 0) {
 cat("4. Checking for key functions...\n")
 key_functions <- c(
   "DEMATEL_Sensitivity",
-  "compute_sensitivity_numerical", 
+ # "compute_sensitivity_numerical", 
   "compute_sensitivity_analytical",
   "identify_critical_relationships",
   "intervention_analysis",

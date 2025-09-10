@@ -71,6 +71,244 @@ identify_critical_relationships.DEMATEL_Sensitivity <- function(obj, threshold_p
   return(critical_relationships)
 }
 
+#' Enhanced Intervention Analysis with Proper Boundary Handling
+#'
+#' Analyzes potential interventions that respect DEMATEL scale boundaries.
+#' Only suggests feasible changes: +1 when current < max, -1 when current > min.
+#'
+#' @param obj DEMATEL_Sensitivity object with computed sensitivity matrix
+#' @param target_lambda_change Numeric. Desired change in λmax
+#' @param intervention_type Character. "continuous" or "discrete" (default: "discrete")
+#' @param max_value Numeric. Maximum allowed value (default: 4)
+#' @param min_value Numeric. Minimum allowed value (default: 0)
+#'
+#' @return Data frame with boundary-respecting interventions
+#'
+#' @examples
+#' # Proper discrete interventions with boundary respect
+#' interventions <- intervention_analysis_enhanced(sens_obj, 
+#'                                               target_lambda_change = -0.1)
+#'
+#' @export
+intervention_analysis_enhanced <- function(obj, target_lambda_change, 
+                                           intervention_type = "discrete",
+                                           max_value = 4,
+                                           min_value = 0) {
+  UseMethod("intervention_analysis_enhanced")
+}
+
+#' @export
+intervention_analysis_enhanced.DEMATEL_Sensitivity <- function(obj, target_lambda_change, 
+                                                               intervention_type = "discrete",
+                                                               max_value = 4,
+                                                               min_value = 0) {
+  if (is.null(obj$sensitivity_matrix)) {
+    stop("Please compute sensitivity matrix first")
+  }
+  
+  if (!intervention_type %in% c("continuous", "discrete")) {
+    stop("intervention_type must be 'continuous' or 'discrete'")
+  }
+  
+  interventions <- data.frame()
+  
+  if (intervention_type == "continuous") {
+    # Original continuous method (unchanged)
+    for (i in 1:obj$n) {
+      for (j in 1:obj$n) {
+        sensitivity <- obj$sensitivity_matrix[i, j]
+        
+        if (!is.na(sensitivity) && abs(sensitivity) > 1e-6) {
+          required_change <- target_lambda_change / sensitivity
+          new_aij <- obj$A[i, j] + required_change
+          
+          # Feasibility: must be within bounds
+          feasible <- (new_aij >= min_value && new_aij <= max_value)
+          
+          intervention <- data.frame(
+            from_factor = obj$factor_names[i],
+            to_factor = obj$factor_names[j],
+            from_index = i,
+            to_index = j,
+            current_aij = obj$A[i, j],
+            required_change = required_change,
+            new_aij = new_aij,
+            sensitivity = sensitivity,
+            efficiency = abs(target_lambda_change) / abs(required_change),
+            feasible = feasible,
+            intervention_type = "continuous",
+            actual_lambda_change = sensitivity * required_change,
+            stringsAsFactors = FALSE
+          )
+          
+          interventions <- rbind(interventions, intervention)
+        }
+      }
+    }
+    
+  } else {
+    # CORRECTED discrete method with proper boundary handling
+    for (i in 1:obj$n) {
+      for (j in 1:obj$n) {
+        sensitivity <- obj$sensitivity_matrix[i, j]
+        current_value <- obj$A[i, j]
+        
+        if (!is.na(sensitivity) && abs(sensitivity) > 1e-6) {
+          
+          # Determine valid discrete changes based on current value and boundaries
+          valid_changes <- c()
+          
+          # Can we increase by 1? Only if current < max
+          if (current_value < max_value) {
+            valid_changes <- c(valid_changes, 1)
+          }
+          
+          # Can we decrease by 1? Only if current > min  
+          if (current_value > min_value) {
+            valid_changes <- c(valid_changes, -1)
+          }
+          
+          # Skip this relationship if no valid changes possible
+          if (length(valid_changes) == 0) {
+            next
+          }
+          
+          # Create interventions for each valid change
+          for (change in valid_changes) {
+            new_aij <- current_value + change
+            
+            # Calculate actual lambda change for this discrete step
+            actual_lambda_change <- sensitivity * change
+            
+            # Calculate how close this gets us to target
+            target_achievement <- abs(actual_lambda_change) / abs(target_lambda_change)
+            error_from_target <- abs(actual_lambda_change - target_lambda_change)
+            
+            # All discrete interventions within bounds are feasible by definition
+            feasible <- TRUE
+            
+            intervention <- data.frame(
+              from_factor = obj$factor_names[i],
+              to_factor = obj$factor_names[j],
+              from_index = i,
+              to_index = j,
+              current_aij = current_value,
+              required_change = change,
+              new_aij = new_aij,
+              sensitivity = sensitivity,
+              actual_lambda_change = actual_lambda_change,
+              target_achievement = target_achievement,
+              error_from_target = error_from_target,
+              feasible = feasible,
+              intervention_type = "discrete",
+              # Additional helpful fields
+              boundary_constrained = (current_value == min_value && change == -1) || 
+                (current_value == max_value && change == 1),
+              change_direction = ifelse(change > 0, "Increase", "Decrease"),
+              stringsAsFactors = FALSE
+            )
+            
+            interventions <- rbind(interventions, intervention)
+          }
+        }
+      }
+    }
+  }
+  
+  if (nrow(interventions) == 0) {
+    warning("No valid interventions found within the specified boundaries")
+    return(data.frame())
+  }
+  
+  # Sort results
+  if (intervention_type == "continuous") {
+    # Sort by efficiency, then feasibility
+    interventions <- interventions[order(-interventions$feasible, interventions$efficiency, decreasing = TRUE), ]
+  } else {
+    # Sort by target achievement (best first), then by error from target (smallest first)
+    interventions <- interventions[order(-interventions$target_achievement, interventions$error_from_target), ]
+  }
+  
+  rownames(interventions) <- NULL
+  return(interventions)
+}
+
+#' Get Boundary Analysis Summary
+#'
+#' Analyzes how boundary constraints affect intervention options
+#'
+#' @param obj DEMATEL_Sensitivity object
+#' @param max_value Maximum scale value
+#' @param min_value Minimum scale value
+#' @return List with boundary constraint analysis
+#'
+#' @export
+analyze_boundary_constraints <- function(obj, max_value = 4, min_value = 0) {
+  UseMethod("analyze_boundary_constraints")
+}
+
+#' @export
+analyze_boundary_constraints.DEMATEL_Sensitivity <- function(obj, max_value = 4, min_value = 0) {
+  
+  # Create off-diagonal mask to exclude self-influence relationships
+  n <- obj$n
+  off_diagonal <- !diag(n)  # TRUE for all non-diagonal positions
+  
+  # Count relationships at boundaries (excluding diagonal)
+  at_max <- sum(obj$A[off_diagonal] == max_value)
+  at_min <- sum(obj$A[off_diagonal] == min_value)
+  at_boundaries <- at_max + at_min
+  
+  # Count relationships that can be increased/decreased (excluding diagonal)
+  can_increase <- sum(obj$A[off_diagonal] < max_value)
+  can_decrease <- sum(obj$A[off_diagonal] > min_value)
+  
+  # Total relationships (excluding diagonal)
+  total_relationships <- n^2 - n
+  
+  # Analysis of sensitivity for boundary-constrained relationships
+  # Note: these still include diagonal for sensitivity analysis consistency
+  sensitivity_at_max <- obj$sensitivity_matrix[obj$A == max_value]
+  sensitivity_at_min <- obj$sensitivity_matrix[obj$A == min_value]
+  
+  boundary_analysis <- list(
+    total_relationships = total_relationships,
+    relationships_at_max = at_max,
+    relationships_at_min = at_min,
+    relationships_at_boundaries = at_boundaries,
+    can_increase = can_increase,
+    can_decrease = can_decrease,
+    flexibility_score = (can_increase + can_decrease) / (2 * total_relationships),
+    
+    # Sensitivity analysis for constrained relationships
+    high_sensitivity_at_max = sum(abs(sensitivity_at_max) > quantile(abs(obj$sensitivity_matrix), 0.9, na.rm = TRUE), na.rm = TRUE),
+    high_sensitivity_at_min = sum(abs(sensitivity_at_min) > quantile(abs(obj$sensitivity_matrix), 0.9, na.rm = TRUE), na.rm = TRUE),
+    
+    # Recommendations
+    recommendations = list()
+  )
+  
+  # Generate recommendations
+  if (boundary_analysis$flexibility_score < 0.5) {
+    boundary_analysis$recommendations <- c(boundary_analysis$recommendations,
+                                           "⚠️ Low system flexibility due to many boundary values")
+  }
+  
+  if (boundary_analysis$high_sensitivity_at_max > 0) {
+    boundary_analysis$recommendations <- c(boundary_analysis$recommendations,
+                                           paste("🔴", boundary_analysis$high_sensitivity_at_max, 
+                                                 "high-sensitivity relationships at maximum value (can only be decreased)"))
+  }
+  
+  if (boundary_analysis$high_sensitivity_at_min > 0) {
+    boundary_analysis$recommendations <- c(boundary_analysis$recommendations,
+                                           paste("🔵", boundary_analysis$high_sensitivity_at_min, 
+                                                 "high-sensitivity relationships at minimum value (can only be increased)"))
+  }
+  
+  return(boundary_analysis)
+}
+
 #' Intervention Analysis
 #'
 #' Analyzes potential interventions to achieve a target change in the
@@ -246,6 +484,8 @@ print.DEMATEL_Sensitivity <- function(x, ...) {
   
   invisible(x)
 }
+
+
 #' #' Print Method for DEMATEL_Sensitivity
 #' #'
 #' #' @param x DEMATEL_Sensitivity object
@@ -325,4 +565,139 @@ summary.DEMATEL_Sensitivity <- function(object, ...) {
 # Helper function for null coalescing
 `%||%` <- function(x, y) {
   if (is.null(x)) y else x
+}
+
+#' Enhanced Intervention Analysis with Proper Boundary Handling
+#'
+#' @param obj DEMATEL_Sensitivity object with computed sensitivity matrix
+#' @param target_lambda_change Numeric. Desired change in λmax
+#' @param intervention_type Character. "continuous" or "discrete" (default: "discrete")
+#' @param max_value Numeric. Maximum allowed value (default: 4)
+#' @param min_value Numeric. Minimum allowed value (default: 0)
+#' @return Data frame with boundary-respecting interventions
+#' @export
+intervention_analysis_enhanced <- function(obj, target_lambda_change, 
+                                           intervention_type = "discrete",
+                                           max_value = 4,
+                                           min_value = 0) {
+  UseMethod("intervention_analysis_enhanced")
+}
+
+#' @export
+intervention_analysis_enhanced.DEMATEL_Sensitivity <- function(obj, target_lambda_change, 
+                                                               intervention_type = "discrete",
+                                                               max_value = 4,
+                                                               min_value = 0) {
+  if (is.null(obj$sensitivity_matrix)) {
+    stop("Please compute sensitivity matrix first")
+  }
+  
+  interventions <- data.frame()
+  
+  if (intervention_type == "continuous") {
+    # Original continuous method
+    for (i in 1:obj$n) {
+      for (j in 1:obj$n) {
+        sensitivity <- obj$sensitivity_matrix[i, j]
+        
+        if (!is.na(sensitivity) && abs(sensitivity) > 1e-6) {
+          required_change <- target_lambda_change / sensitivity
+          new_aij <- obj$A[i, j] + required_change
+          
+          feasible <- (new_aij >= min_value && new_aij <= max_value)
+          
+          intervention <- data.frame(
+            from_factor = obj$factor_names[i],
+            to_factor = obj$factor_names[j],
+            from_index = i,
+            to_index = j,
+            current_aij = obj$A[i, j],
+            required_change = required_change,
+            new_aij = new_aij,
+            sensitivity = sensitivity,
+            efficiency = abs(target_lambda_change) / abs(required_change),
+            feasible = feasible,
+            intervention_type = "continuous",
+            actual_lambda_change = sensitivity * required_change,
+            stringsAsFactors = FALSE
+          )
+          
+          interventions <- rbind(interventions, intervention)
+        }
+      }
+    }
+    
+  } else {
+    # Discrete method with proper boundary handling
+    for (i in 1:obj$n) {
+      for (j in 1:obj$n) {
+        sensitivity <- obj$sensitivity_matrix[i, j]
+        current_value <- obj$A[i, j]
+        
+        if (!is.na(sensitivity) && abs(sensitivity) > 1e-6) {
+          
+          # Determine valid discrete changes based on boundaries
+          valid_changes <- c()
+          
+          # Can increase by 1? Only if current < max
+          if (current_value < max_value) {
+            valid_changes <- c(valid_changes, 1)
+          }
+          
+          # Can decrease by 1? Only if current > min
+          if (current_value > min_value) {
+            valid_changes <- c(valid_changes, -1)
+          }
+          
+          # Skip if no valid changes
+          if (length(valid_changes) == 0) {
+            next
+          }
+          
+          # Create interventions for each valid change
+          for (change in valid_changes) {
+            new_aij <- current_value + change
+            actual_lambda_change <- sensitivity * change
+            target_achievement <- abs(actual_lambda_change) / abs(target_lambda_change)
+            error_from_target <- abs(actual_lambda_change - target_lambda_change)
+            
+            intervention <- data.frame(
+              from_factor = obj$factor_names[i],
+              to_factor = obj$factor_names[j],
+              from_index = i,
+              to_index = j,
+              current_aij = current_value,
+              required_change = change,
+              new_aij = new_aij,
+              sensitivity = sensitivity,
+              actual_lambda_change = actual_lambda_change,
+              target_achievement = target_achievement,
+              error_from_target = error_from_target,
+              feasible = TRUE,
+              intervention_type = "discrete",
+              change_direction = ifelse(change > 0, "Increase", "Decrease"),
+              stringsAsFactors = FALSE
+            )
+            
+            interventions <- rbind(interventions, intervention)
+          }
+        }
+      }
+    }
+  }
+  
+  if (nrow(interventions) == 0) {
+    warning("No valid interventions found within the specified boundaries")
+    return(data.frame())
+  }
+  
+  # Sort results
+  if (intervention_type == "continuous") {
+    interventions <- interventions[order(-interventions$feasible, interventions$efficiency, decreasing = TRUE), ]
+  } else {
+    interventions <- interventions[order(-interventions$target_achievement, interventions$error_from_target), ]
+  }
+  
+  rownames(interventions) <- NULL
+  return(interventions)
 }

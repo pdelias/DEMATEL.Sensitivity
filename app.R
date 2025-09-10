@@ -453,7 +453,7 @@ ui <- dashboardPage(
         )
       ),
       
-      # Intervention Analysis Tab
+      # Intervention Analysis Tab (Updated UI)
       tabItem(
         tabName = "intervention",
         conditionalPanel(
@@ -481,10 +481,26 @@ ui <- dashboardPage(
               
               helpText("Positive: Increase system amplification | Negative: Decrease system amplification"),
               
-              checkboxInput(
-                "feasibility_check",
-                "Only show feasible interventions (non-negative values)",
-                value = TRUE
+              h4("Intervention Type:"),
+              radioButtons(
+                "intervention_type",
+                "Choose intervention approach:",
+                choices = list(
+                  "Discrete Changes (Practical: ±1 within scale bounds)" = "discrete",
+                  "Continuous Changes (Theoretical optimal)" = "continuous"
+                ),
+                selected = "discrete"
+              ),
+              
+              # Scale boundary settings
+              conditionalPanel(
+                condition = "input.intervention_type == 'discrete'",
+                h5("DEMATEL Scale Boundaries:"),
+                fluidRow(
+                  column(6, numericInput("dematel_min_value", "Min:", value = 0, min = 0, max = 2, step = 1)),
+                  column(6, numericInput("dematel_max_value", "Max:", value = 4, min = 2, max = 10, step = 1))
+                ),
+                helpText("Standard DEMATEL: 0 (no influence) to 4 (very high influence)")
               ),
               
               br(),
@@ -496,15 +512,25 @@ ui <- dashboardPage(
               
               br(), br(),
               
+              # Boundary constraint analysis
+              conditionalPanel(
+                condition = "output.intervention_computed && input.intervention_type == 'discrete'",
+                wellPanel(
+                  style = "background-color: #f8f9fa; border: 1px solid #dee2e6;",
+                  h5("🚧 Boundary Constraints:"),
+                  htmlOutput("boundary_analysis_summary")
+                )
+              ),
+              
               conditionalPanel(
                 condition = "output.intervention_computed",
-                h4("Filter Options:"),
+                h4("Display Options:"),
                 
                 sliderInput(
                   "max_interventions",
                   "Show top n interventions:",
-                  min = 0,
-                  max = 100,
+                  min = 5,
+                  max = 50,
                   value = 15,
                   step = 5
                 )
@@ -529,7 +555,18 @@ ui <- dashboardPage(
               
               conditionalPanel(
                 condition = "output.intervention_computed",
-                h4("Recommended Interventions (Ordered by Efficiency):"),
+                
+                # Best intervention summary for discrete mode
+                conditionalPanel(
+                  condition = "input.intervention_type == 'discrete'",
+                  wellPanel(
+                    style = "background-color: #fff3cd; border: 1px solid #ffeaa7;",
+                    h5("🎯 Best Single Intervention:"),
+                    htmlOutput("best_intervention_summary")
+                  )
+                ),
+                
+                h4("All Recommended Interventions:"),
                 DT::dataTableOutput("intervention_table"),
                 
                 br(),
@@ -546,15 +583,17 @@ ui <- dashboardPage(
             condition = "output.intervention_computed",
             fluidRow(
               box(
-                title = "📈 Intervention Efficiency Analysis", 
+                title = "📈 Intervention Visualization", 
                 status = "success", 
                 solidHeader = TRUE,
                 width = 12,
                 
-                h4("Efficiency Distribution:"),
-                p("Higher efficiency means smaller changes needed to achieve the target effect."),
+                h4(textOutput("intervention_plot_title")),
+                p(textOutput("intervention_plot_subtitle")),
                 
-                plotOutput("intervention_efficiency_plot", height = "400px")
+                plotOutput("intervention_efficiency_plot", height = "500px"),
+                
+                
               )
             )
           )
@@ -841,19 +880,31 @@ server <- function(input, output, session) {
     })
   })
   
-  # Intervention analysis
+  # Intervention analysis (Updated with boundary handling)
   observeEvent(input$run_intervention, {
     req(values$sensitivity_results)
     
     tryCatch({
-      intervention_results <- intervention_analysis(
+      # Use the enhanced intervention function with proper boundary handling
+      intervention_results <- intervention_analysis_enhanced(
         values$sensitivity_results,
         target_lambda_change = input$target_lambda_change,
-        feasibility_check = input$feasibility_check
+        intervention_type = input$intervention_type,
+        max_value = input$dematel_max_value,
+        min_value = input$dematel_min_value
       )
       
       values$intervention_results <- intervention_results
       values$intervention_computed <- TRUE
+      
+      # Analyze boundary constraints for discrete mode
+      if (input$intervention_type == "discrete") {
+        values$boundary_analysis <- analyze_boundary_constraints(
+          values$sensitivity_results,
+          max_value = input$dematel_max_value,
+          min_value = input$dematel_min_value
+        )
+      }
       
       showNotification("✅ Intervention analysis completed!", type = "message")
       
@@ -1276,78 +1327,275 @@ server <- function(input, output, session) {
     })
   })
   
-  # Output: Intervention table
+  # Updated intervention table with boundary awareness
+  # Updated intervention table with boundary awareness
   output$intervention_table <- DT::renderDataTable({
     req(values$intervention_results)
     
     tryCatch({
       display_data <- head(values$intervention_results, input$max_interventions)
-      display_data <- display_data[, c("from_factor", "to_factor", "current_aij", 
-                                       "required_change", "new_aij", "efficiency", "feasible")]
       
-      names(display_data) <- c("From Factor", "To Factor", "Current Value", 
-                               "Required Change", "New Value", "Efficiency", "Feasible")
+      if (input$intervention_type == "discrete") {
+        # Discrete mode - show boundary constraints
+        display_cols <- c("from_factor", "to_factor", "current_aij", 
+                          "required_change", "new_aij", "actual_lambda_change",
+                          "target_achievement", "change_direction")
+        
+        # Check which columns actually exist
+        existing_cols <- display_cols[display_cols %in% names(display_data)]
+        display_data <- display_data[, existing_cols, drop = FALSE]
+        
+        names(display_data) <- c("From Factor", "To Factor", "Current", 
+                                 "Change", "New Value", "λmax Effect", 
+                                 "Target Achievement", "Direction")[1:length(existing_cols)]
+        
+        # Format target achievement as percentage if it exists
+        if ("Target Achievement" %in% names(display_data)) {
+          display_data$`Target Achievement` <- paste0(round(as.numeric(gsub("%", "", display_data$`Target Achievement`)) * 100, 1), "%")
+        }
+        
+      } else {
+        # Continuous mode - different columns
+        display_cols <- c("from_factor", "to_factor", "current_aij", 
+                          "required_change", "new_aij", "efficiency", "feasible")
+        
+        # Check which columns actually exist
+        existing_cols <- display_cols[display_cols %in% names(display_data)]
+        display_data <- display_data[, existing_cols, drop = FALSE]
+        
+        names(display_data) <- c("From Factor", "To Factor", "Current", 
+                                 "Required Change", "New Value", "Efficiency", "Feasible")[1:length(existing_cols)]
+      }
       
-      DT::datatable(
+      dt <- DT::datatable(
         display_data,
         options = list(
           pageLength = 15,
           scrollX = TRUE,
-          order = list(list(5, "desc"))  # Order by efficiency
+          order = if (input$intervention_type == "discrete" && "Target Achievement" %in% names(display_data)) {
+            list(list(6, "desc"))  # Order by Target Achievement if it exists
+          } else if (input$intervention_type == "continuous" && "Efficiency" %in% names(display_data)) {
+            list(list(5, "desc"))  # Order by efficiency if it exists
+          } else {
+            list()  # No specific ordering
+          }
         )
-      ) %>%
-        DT::formatRound(columns = c("Current Value", "Required Change", "New Value", "Efficiency"), 
-                        digits = 4) %>%
-        DT::formatStyle(
-          "Feasible",
-          backgroundColor = DT::styleEqual(
-            c(TRUE, FALSE),
-            c("#d4edda", "#f8d7da")
+      )
+      
+      # Format numeric columns that exist
+      numeric_cols <- intersect(c("Current", "λmax Effect", "Required Change", "New Value", "Efficiency"), 
+                                names(display_data))
+      if (length(numeric_cols) > 0) {
+        dt <- dt %>% DT::formatRound(columns = numeric_cols, digits = 4)
+      }
+      
+      # Add color coding based on mode and available columns
+      if (input$intervention_type == "discrete" && "Direction" %in% names(display_data)) {
+        dt <- dt %>%
+          DT::formatStyle(
+            "Direction",
+            backgroundColor = DT::styleEqual(
+              c("Increase", "Decrease"),
+              c("#d4edda", "#cce5ff")
+            )
           )
-        )
+      } else if (input$intervention_type == "continuous" && "Feasible" %in% names(display_data)) {
+        dt <- dt %>%
+          DT::formatStyle(
+            "Feasible",
+            backgroundColor = DT::styleEqual(
+              c(TRUE, FALSE),
+              c("#d4edda", "#f8d7da")
+            )
+          )
+      }
+      
+      return(dt)
+      
     }, error = function(e) {
-      DT::datatable(data.frame(Error = paste("Error generating intervention table:", e$message)))
+      DT::datatable(data.frame(Error = paste("Error:", e$message)))
     })
   })
   
-  # Output: Intervention efficiency plot
+  # Updated plot titles
+  output$intervention_plot_title <- renderText({
+    if (input$intervention_type == "discrete") {
+      "Boundary-Aware Discrete Interventions"
+    } else {
+      "Continuous Intervention Analysis"
+    }
+  })
+  
+  output$intervention_plot_subtitle <- renderText({
+    if (input$intervention_type == "discrete") {
+      paste("DEMATEL scale changes (", input$dematel_min_value, "-", input$dematel_max_value, 
+            ") respecting current value boundaries")
+    } else {
+      "Theoretical optimal changes for comparison"
+    }
+  })
+  
+  # Updated intervention plot
+  # Updated intervention plot
   output$intervention_efficiency_plot <- renderPlot({
     req(values$intervention_results)
     
     tryCatch({
-      top_interventions <- head(values$intervention_results, input$max_interventions)
-      top_interventions$relationship <- paste0(top_interventions$from_factor, " → ", 
-                                               top_interventions$to_factor)
-      top_interventions$relationship <- factor(top_interventions$relationship, 
-                                               levels = rev(top_interventions$relationship))
+      plot_data <- head(values$intervention_results, input$max_interventions)
       
-      ggplot(top_interventions, aes(x = relationship, y = efficiency, fill = feasible)) +
-        geom_col(alpha = 0.8) +
-        coord_flip() +
-        scale_fill_manual(
-          values = c("TRUE" = "#28a745", "FALSE" = "#dc3545"),
-          name = "Feasible",
-          labels = c("FALSE" = "No", "TRUE" = "Yes")
-        ) +
-        theme_minimal() +
-        theme(
-          plot.title = element_text(size = 14, face = "bold"),
-          axis.text.y = element_text(size = 8)
-        ) +
-        labs(
-          title = "Intervention Efficiency Ranking",
-          subtitle = paste("Target λmax change:", input$target_lambda_change),
-          x = "Relationship",
-          y = "Efficiency (higher = better)"
+      if (nrow(plot_data) == 0) {
+        return(
+          ggplot() +
+            annotate("text", x = 0.5, y = 0.5, 
+                     label = "No interventions available\nwithin scale boundaries",
+                     size = 6, hjust = 0.5, vjust = 0.5) +
+            theme_void() +
+            labs(title = "Intervention Analysis")
         )
+      }
+      
+      # FIXED: Create unique relationship labels that include change direction
+      plot_data$relationship <- paste0(plot_data$from_factor, " → ", plot_data$to_factor, 
+                                       " (", ifelse(plot_data$required_change > 0, "+1", "-1"), ")")
+      plot_data$relationship <- factor(plot_data$relationship, levels = rev(plot_data$relationship))
+      
+      # Create change labels
+      plot_data$change_label <- ifelse(plot_data$required_change > 0, "+1", "-1")
+      
+      if (input$intervention_type == "discrete") {
+        # Discrete mode plot
+        p <- ggplot(plot_data, aes(x = relationship, y = target_achievement, 
+                                   fill = change_direction)) +
+          geom_col(alpha = 0.8) +
+          coord_flip() +
+          scale_fill_manual(
+            values = c("Increase" = "#28a745", "Decrease" = "#007bff"),
+            name = "Change Type"
+          ) +
+          theme_minimal() +
+          theme(
+            plot.title = element_text(size = 14, face = "bold"),
+            axis.text.y = element_text(size = 8)
+          ) +
+          labs(
+            title = "Discrete Intervention Options (Boundary-Aware)",
+            subtitle = paste("Target λmax change:", input$target_lambda_change),
+            x = "Relationship",
+            y = "Target Achievement"
+          ) +
+          scale_y_continuous(labels = function(x) paste0(round(x * 100, 1), "%"))
+        
+      } else {
+        # Continuous mode plot
+        p <- ggplot(plot_data, aes(x = relationship, y = efficiency, 
+                                   fill = feasible)) +
+          geom_col(alpha = 0.8) +
+          coord_flip() +
+          scale_fill_manual(
+            values = c("TRUE" = "#28a745", "FALSE" = "#dc3545"),
+            name = "Within Bounds"
+          ) +
+          theme_minimal() +
+          theme(
+            plot.title = element_text(size = 14, face = "bold"),
+            axis.text.y = element_text(size = 8)
+          ) +
+          labs(
+            title = "Continuous Intervention Analysis",
+            subtitle = paste("Target λmax change:", input$target_lambda_change),
+            x = "Relationship",
+            y = "Efficiency"
+          )
+      }
+      
+      return(p)
+      
     }, error = function(e) {
       ggplot() +
         annotate("text", x = 0.5, y = 0.5, 
-                 label = paste("Efficiency plot\nnot available:\n", e$message),
-                 size = 6, hjust = 0.5, vjust = 0.5) +
+                 label = paste("Plot error:\n", e$message),
+                 size = 5, hjust = 0.5, vjust = 0.5) +
         theme_void() +
-        labs(title = "Intervention Efficiency - Error")
+        labs(title = "Intervention Plot - Error")
     })
+  })
+  
+  # NEW: Boundary analysis summary
+  output$boundary_analysis_summary <- renderUI({
+    req(values$boundary_analysis, input$intervention_type == "discrete")
+    
+    ba <- values$boundary_analysis
+    
+    tagList(
+      p(strong("System Flexibility: "), 
+        paste0(round(ba$flexibility_score * 100, 1), "%")),
+      p("Relationships at boundaries: ", ba$relationships_at_boundaries, 
+        " (", ba$relationships_at_max, " at max, ", ba$relationships_at_min, " at min)"),
+      p("Available interventions: ", ba$can_increase, " can increase, ", ba$can_decrease, " can decrease"),
+      
+      if (length(ba$recommendations) > 0) {
+        div(
+          h6("Recommendations:"),
+          lapply(ba$recommendations, function(rec) p(rec, style = "margin-bottom: 5px;"))
+        )
+      }
+    )
+  })
+  
+  # NEW: Best intervention summary
+  output$best_intervention_summary <- renderUI({
+    req(values$intervention_results, input$intervention_type == "discrete")
+    
+    if (nrow(values$intervention_results) > 0) {
+      best <- values$intervention_results[1, ]
+      
+      # Check if this is a boundary-constrained situation
+      boundary_note <- ""
+      if ("boundary_constrained" %in% names(best) && best$boundary_constrained) {
+        boundary_note <- " (⚠️ At scale boundary)"
+      }
+      
+      tagList(
+        strong("Relationship: "), 
+        span(paste(best$from_factor, "→", best$to_factor), style = "color: #856404;"), 
+        boundary_note, br(),
+        
+        strong("Current Value: "), best$current_aij, " → ",
+        strong("Recommended: "), best$new_aij, 
+        " (", ifelse(best$required_change > 0, "+", ""), best$required_change, ")", br(),
+        
+        strong("Expected λmax Change: "), round(best$actual_lambda_change, 4), br(),
+        
+        if ("target_achievement" %in% names(best)) {
+          tagList(
+            strong("Target Achievement: "), paste0(round(best$target_achievement * 100, 1), "%"), br()
+          )
+        },
+        
+        strong("Change Type: "), best$change_direction
+      )
+    } else {
+      p("No feasible interventions found within scale boundaries.", style = "color: #856404;")
+    }
+  })
+  
+
+  # NEW: Plot titles
+  output$intervention_plot_title <- renderText({
+    if (input$intervention_type == "discrete") {
+      "Boundary-Aware Discrete Interventions"
+    } else {
+      "Continuous Intervention Analysis"
+    }
+  })
+  
+  output$intervention_plot_subtitle <- renderText({
+    if (input$intervention_type == "discrete") {
+      paste("DEMATEL scale changes (", input$dematel_min_value, "-", input$dematel_max_value, 
+            ") respecting current value boundaries")
+    } else {
+      "Theoretical optimal changes for comparison"
+    }
   })
   
   # Output: Comprehensive report

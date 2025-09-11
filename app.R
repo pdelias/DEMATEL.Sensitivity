@@ -1,5 +1,5 @@
-# DEMATEL Sensitivity Analysis Shiny App - DEBUG VERSION
-# File: app.R (with debugging enhancements)
+# DEMATEL Sensitivity Analysis Shiny App
+# File: app.R
 
 # Load required libraries
 library(shiny)
@@ -18,7 +18,7 @@ source("R/sensitivity-methods.R", local = TRUE)
 source("R/sensitivity-visualization.R", local = TRUE)
 source("R/ui_components.R", local = TRUE)
 
-# Define UI (Add debug tab)
+# Define UI
 ui <- dashboardPage(
   
   # Header
@@ -35,7 +35,6 @@ ui <- dashboardPage(
       menuItem("📊 Data Input", tabName = "input", icon = icon("upload")),
       menuItem("📈 Spectral Analysis", tabName = "spectral", icon = icon("chart-line")),
       menuItem("🔍 Sensitivity Analysis", tabName = "sensitivity", icon = icon("search")),
-      menuItem("🐛 DEBUG DATA", tabName = "debug", icon = icon("bug")),  # NEW DEBUG TAB
       menuItem("🎯 Critical Relationships", tabName = "critical", icon = icon("bullseye")),
       menuItem("💡 Intervention Analysis", tabName = "intervention", icon = icon("lightbulb")),
       menuItem("📋 Comprehensive Report", tabName = "report", icon = icon("file-alt")),
@@ -43,14 +42,14 @@ ui <- dashboardPage(
     )
   ),
   
-  # Body (Add debug tab content)
+  # Body
   dashboardBody(
     tags$head(
       tags$link(rel = "stylesheet", type = "text/css", href = "styles.css")
     ),
     
     tabItems(
-      # Data Input Tab (unchanged)
+      # Data Input Tab
       tabItem(
         tabName = "input",
         fluidRow(
@@ -160,80 +159,7 @@ ui <- dashboardPage(
         )
       ),
       
-      # NEW DEBUG TAB
-      tabItem(
-        tabName = "debug",
-        conditionalPanel(
-          condition = "!output.matrix_processed",
-          no_data_message("Please upload and process a matrix first in the Data Input tab.")
-        ),
-        
-        conditionalPanel(
-          condition = "output.matrix_processed",
-          fluidRow(
-            box(
-              title = "🐛 DEBUG: Input Matrices", 
-              status = "warning", 
-              solidHeader = TRUE,
-              width = 6,
-              
-              h4("Original Matrix A:"),
-              DT::dataTableOutput("debug_matrix_A"),
-              
-              br(),
-              h4("Normalized Matrix D:"),
-              DT::dataTableOutput("debug_matrix_D"),
-              
-              br(),
-              h4("Total Relations Matrix T:"),
-              DT::dataTableOutput("debug_matrix_T")
-            ),
-            
-            box(
-              title = "🐛 DEBUG: Scaling and Eigenvalues", 
-              status = "warning", 
-              solidHeader = TRUE,
-              width = 6,
-              
-              h4("Scaling Information:"),
-              verbatimTextOutput("debug_scaling_info"),
-              
-              br(),
-              h4("Eigenvalue Information:"),
-              verbatimTextOutput("debug_eigenvalue_info"),
-              
-              br(),
-              h4("Assumptions Check:"),
-              verbatimTextOutput("debug_assumptions")
-            )
-          ),
-          
-          conditionalPanel(
-            condition = "output.sensitivity_computed",
-            fluidRow(
-              box(
-                title = "🐛 DEBUG: Sensitivity Matrix Raw Data", 
-                status = "danger", 
-                solidHeader = TRUE,
-                width = 12,
-                
-                h4("Raw Sensitivity Matrix:"),
-                DT::dataTableOutput("debug_sensitivity_matrix"),
-                
-                br(),
-                h4("Sensitivity Matrix Statistics:"),
-                verbatimTextOutput("debug_sensitivity_stats"),
-                
-                br(),
-                h4("Sensitivity Object Structure:"),
-                verbatimTextOutput("debug_sensitivity_object")
-              )
-            )
-          )
-        )
-      ),
-      
-      # Spectral Analysis Tab (unchanged)
+      # Spectral Analysis Tab
       tabItem(
         tabName = "spectral",
         conditionalPanel(
@@ -283,7 +209,7 @@ ui <- dashboardPage(
         )
       ),
       
-      # Sensitivity Analysis Tab (unchanged)
+      # Sensitivity Analysis Tab
       tabItem(
         tabName = "sensitivity",
         conditionalPanel(
@@ -394,7 +320,7 @@ ui <- dashboardPage(
         )
       ),
       
-      # Critical Relationships Tab (unchanged)
+      # Critical Relationships Tab
       tabItem(
         tabName = "critical",
         conditionalPanel(
@@ -444,15 +370,226 @@ ui <- dashboardPage(
         )
       ),
       
-      # Other tabs remain unchanged...
-      tabItem(tabName = "intervention", p("Intervention tab content...")),
-      tabItem(tabName = "report", p("Report tab content...")),
-      tabItem(tabName = "help", p("Help tab content..."))
+      # Intervention Analysis Tab
+      tabItem(
+        tabName = "intervention",
+        conditionalPanel(
+          condition = "!output.sensitivity_computed",
+          no_data_message("Please complete sensitivity analysis first.")
+        ),
+        
+        conditionalPanel(
+          condition = "output.sensitivity_computed",
+          fluidRow(
+            box(
+              title = "⚙️ Intervention Settings", 
+              status = "primary", 
+              solidHeader = TRUE,
+              width = 4,
+              
+              h4("Target Change in λmax:"),
+              numericInput(
+                "target_lambda_change",
+                "Desired change in dominant eigenvalue:",
+                value = -0.1,
+                step = 0.01
+              ),
+              
+              helpText("Negative values reduce system amplification, positive values increase it."),
+              
+              br(),
+              h4("Intervention Type:"),
+              radioButtons(
+                "intervention_type",
+                "Select intervention approach:",
+                choices = list(
+                  "Discrete changes (±1 on DEMATEL scale)" = "discrete",
+                  "Continuous changes (any value)" = "continuous"
+                ),
+                selected = "discrete"
+              ),
+              
+              br(),
+              actionButton(
+                "run_intervention",
+                "💡 Analyze Interventions",
+                class = "btn-warning btn-lg"
+              )
+            ),
+            
+            box(
+              title = "📊 Intervention Results", 
+              status = "warning", 
+              solidHeader = TRUE,
+              width = 8,
+              
+              conditionalPanel(
+                condition = "!output.intervention_computed",
+                div(
+                  style = "text-align: center; padding: 50px;",
+                  icon("lightbulb", style = "font-size: 48px; color: #ccc;"),
+                  h4("Intervention analysis not computed", style = "color: #999; margin-top: 20px;"),
+                  p("Set target change and click 'Analyze Interventions' to begin.")
+                )
+              ),
+              
+              conditionalPanel(
+                condition = "output.intervention_computed",
+                h4("Top Intervention Options:"),
+                DT::dataTableOutput("intervention_table"),
+                
+                br(),
+                downloadButton(
+                  "download_interventions",
+                  "📥 Download Intervention Analysis",
+                  class = "btn-warning"
+                )
+              )
+            )
+          )
+        )
+      ),
+      
+      # Report Tab
+      tabItem(
+        tabName = "report",
+        conditionalPanel(
+          condition = "!output.sensitivity_computed",
+          no_data_message("Please complete sensitivity analysis first.")
+        ),
+        
+        conditionalPanel(
+          condition = "output.sensitivity_computed",
+          fluidRow(
+            box(
+              title = "📋 Comprehensive Report", 
+              status = "success", 
+              solidHeader = TRUE,
+              width = 12,
+              
+              h4("Executive Summary:"),
+              verbatimTextOutput("executive_summary"),
+              
+              br(),
+              h4("Download Options:"),
+              
+              fluidRow(
+                column(3,
+                       downloadButton(
+                         "download_full_report",
+                         "📄 Full Report (PDF)",
+                         class = "btn-success"
+                       )
+                ),
+                column(3,
+                       downloadButton(
+                         "download_summary_report",
+                         "📝 Summary Report (HTML)",
+                         class = "btn-info"
+                       )
+                ),
+                column(3,
+                       downloadButton(
+                         "download_data_package",
+                         "📦 Data Package (ZIP)",
+                         class = "btn-primary"
+                       )
+                ),
+                column(3,
+                       downloadButton(
+                         "download_all_plots",
+                         "🖼️ All Plots (ZIP)",
+                         class = "btn-warning"
+                       )
+                )
+              )
+            )
+          )
+        )
+      ),
+      
+      # Help Tab
+      tabItem(
+        tabName = "help",
+        fluidRow(
+          box(
+            title = "❓ Help & Documentation", 
+            status = "info", 
+            solidHeader = TRUE,
+            width = 6,
+            
+            h4("Getting Started:"),
+            tags$ol(
+              tags$li("Upload your DEMATEL direct influence matrix (A) or use the example dataset"),
+              tags$li("Process the matrix to compute DEMATEL basics (D, T matrices)"),
+              tags$li("Run spectral analysis to understand system dynamics"),
+              tags$li("Compute sensitivity analysis to find critical relationships"),
+              tags$li("Identify intervention opportunities"),
+              tags$li("Generate comprehensive reports")
+            ),
+            
+            br(),
+            h4("File Format Requirements:"),
+            tags$ul(
+              tags$li("CSV format with numeric values only"),
+              tags$li("Square matrix (n × n)"),
+              tags$li("Diagonal elements should be zero"),
+              tags$li("Values typically on 0-4 scale"),
+              tags$li("No missing values (NA)")
+            )
+          ),
+          
+          box(
+            title = "📊 Example Dataset Information", 
+            status = "success", 
+            solidHeader = TRUE,
+            width = 6,
+            
+            h4("Organizational Effectiveness Model:"),
+            p("The example dataset represents a 5-factor organizational system:"),
+            
+            tags$ul(
+              tags$li(strong("Leadership: "), "Strategic direction and decision-making"),
+              tags$li(strong("Communication: "), "Information flow and transparency"),
+              tags$li(strong("Innovation: "), "Creativity and adaptation to change"),
+              tags$li(strong("Risk Management: "), "Threat identification and mitigation"),
+              tags$li(strong("Quality: "), "Standards and continuous improvement")
+            ),
+            
+            br(),
+            actionButton(
+              "load_example_now",
+              "📋 Load Example Dataset",
+              class = "btn-success"
+            )
+          )
+        ),
+        
+        fluidRow(
+          methodology_card(),
+          
+          box(
+            title = "💡 Tips & Best Practices", 
+            status = "warning", 
+            solidHeader = TRUE,
+            width = 6,
+            
+            tags$ul(
+              tags$li("Start with the example dataset to understand the workflow"),
+              tags$li("Use analytical method for matrices up to 50×50"),
+              tags$li("For larger matrices, consider numerical method"),
+              tags$li("Focus on relationships above 90th percentile for interventions"),
+              tags$li("Consider feasibility constraints when planning interventions"),
+              tags$li("Validate results with domain experts")
+            )
+          )
+        )
+      )
     )
   )
 )
 
-# Define Server Logic (Enhanced with debugging)
+# Define Server Logic
 server <- function(input, output, session) {
   
   # Reactive values to store data and results
@@ -464,22 +601,16 @@ server <- function(input, output, session) {
     matrix_processed = FALSE,
     sensitivity_computed = FALSE,
     intervention_computed = FALSE,
-    factor_names = NULL,
-    # NEW DEBUG VALUES
-    debug_D = NULL,
-    debug_T = NULL,
-    debug_scaling_factor = NULL,
-    debug_eigenvalues = NULL,
-    debug_assumptions = NULL
+    factor_names = NULL
   )
   
-  # Matrix processing (Enhanced with debug data storage)
+  # Matrix processing
   observeEvent(input$process_matrix, {
     req(input$input_method)
     
     tryCatch({
       if (input$input_method == "example") {
-        # Parse the actual example data from CSV format
+        # Load example data
         example_text <- "0,3,3,1,3\n0,0,2,0,1\n0,0,0,2,0\n3,1,2,0,3\n4,1,2,1,0"
         A <- as.matrix(read.csv(textConnection(example_text), header = FALSE))
         
@@ -489,14 +620,11 @@ server <- function(input, output, session) {
         values$matrix_A <- A
         values$factor_names <- factor_names
         
-        
       } else if (input$input_method == "upload_A") {
         req(input$file_A)
         
         # Read uploaded file
         A_raw <- read.csv(input$file_A$datapath, header = input$header_A, stringsAsFactors = FALSE)
-        
-        # Convert to matrix
         A <- as.matrix(A_raw)
         mode(A) <- "numeric"
         
@@ -525,33 +653,8 @@ server <- function(input, output, session) {
         values$factor_names <- factor_names
       }
       
-      # Compute DEMATEL matrices with DEBUG information
-      cat("DEBUG: Computing DEMATEL matrices...\n")
+      # Compute DEMATEL matrices
       dematel_matrices <- compute_dematel_matrices(values$matrix_A)
-      
-      # DEBUG: Store intermediate results
-      values$debug_D <- dematel_matrices$D
-      values$debug_T <- dematel_matrices$T
-      
-      # Calculate scaling factor
-      row_sums <- rowSums(values$matrix_A)
-      col_sums <- colSums(values$matrix_A)
-      s <- max(max(row_sums), max(col_sums))
-      values$debug_scaling_factor <- s
-      
-      cat("DEBUG: Scaling factor s =", s, "\n")
-      cat("DEBUG: D matrix computed:\n")
-      print(dematel_matrices$D)
-      cat("DEBUG: T matrix computed:\n")
-      print(dematel_matrices$T)
-      cat("DEBUG: Lambda max =", dematel_matrices$lambda_max, "\n")
-      
-      # Store eigenvalue information
-      eigenvals <- eigen(dematel_matrices$T, only.values = TRUE)$values
-      values$debug_eigenvalues <- eigenvals
-      
-      cat("DEBUG: All eigenvalues:\n")
-      print(eigenvals)
       
       spectral_results <- list(
         lambda_max = dematel_matrices$lambda_max,
@@ -562,14 +665,7 @@ server <- function(input, output, session) {
         n = nrow(values$matrix_A)
       )
       
-      # Add these debug lines:
-      cat("DEBUG: dematel_matrices$lambda_max:", dematel_matrices$lambda_max, "\n")
-      cat("DEBUG: spectral_results$lambda_max:", spectral_results$lambda_max, "\n")
-      cat("DEBUG: T matrix dimensions:", dim(dematel_matrices$T), "\n")
-      cat("DEBUG: T matrix class:", class(dematel_matrices$T), "\n")
-      
-      # Add more spectral analysis if available
-      tryCatch({
+      # Add detailed spectral analysis if available
       if (exists("dematel_spectral_analysis", mode = "function")) {
         spectral_detailed <- dematel_spectral_analysis(
           dematel_matrices$D, 
@@ -577,13 +673,7 @@ server <- function(input, output, session) {
           verbose = FALSE
         )
         spectral_results <- c(spectral_results, spectral_detailed)
-        cat("DEBUG: spectral_detailed computed successfully\n")
-      } else {
-        cat("DEBUG: dematel_spectral_analysis function not found\n")
       }
-      }, error = function(e) {
-        cat("DEBUG: ERROR in spectral_detailed computation:", e$message, "\n")
-      })
       
       values$spectral_results <- spectral_results
       values$matrix_processed <- TRUE
@@ -591,56 +681,30 @@ server <- function(input, output, session) {
       showNotification("✅ Matrix processed successfully!", type = "message")
       
     }, error = function(e) {
-      cat("ERROR in matrix processing:", e$message, "\n")
       showNotification(paste("❌ Error processing matrix:", e$message), type = "error")
     })
   })
   
-  # Sensitivity analysis (Enhanced with DEBUG information)
+  # Load example from help tab
+  observeEvent(input$load_example_now, {
+    updateRadioButtons(session, "input_method", selected = "example")
+    updateTabItems(session, "sidebar", "input")
+    
+    # Trigger processing
+    click("process_matrix")
+  })
+  
+  # Sensitivity analysis
   observeEvent(input$run_sensitivity, {
     req(values$matrix_A)
     
     withProgress(message = "Computing sensitivity analysis...", {
       tryCatch({
-        cat("DEBUG: Starting sensitivity analysis...\n")
-        cat("DEBUG: Input matrix A:\n")
-        print(values$matrix_A)
-        
         # Create sensitivity object
         sens_obj <- DEMATEL_Sensitivity(values$matrix_A, values$factor_names)
         
-        cat("DEBUG: DEMATEL_Sensitivity object created\n")
-        cat("DEBUG: sens_obj$A:\n")
-        print(sens_obj$A)
-        cat("DEBUG: sens_obj$D:\n")
-        print(sens_obj$D)
-        cat("DEBUG: sens_obj$T:\n")
-        print(sens_obj$T)
-        cat("DEBUG: sens_obj$lambda_max:", sens_obj$lambda_max, "\n")
-        
         # Compute sensitivity
-        cat("DEBUG: Calling compute_sensitivity_analytical...\n")
         sens_obj <- compute_sensitivity_analytical(sens_obj)
-        
-        cat("DEBUG: Sensitivity computation completed\n")
-        cat("DEBUG: Computation method:", sens_obj$computation_method, "\n")
-        
-        if (!is.null(sens_obj$sensitivity_matrix)) {
-          cat("DEBUG: Sensitivity matrix dimensions:", dim(sens_obj$sensitivity_matrix), "\n")
-          cat("DEBUG: Sensitivity matrix:\n")
-          print(sens_obj$sensitivity_matrix)
-          cat("DEBUG: Sensitivity matrix range:", range(sens_obj$sensitivity_matrix, na.rm = TRUE), "\n")
-          cat("DEBUG: Number of NA values:", sum(is.na(sens_obj$sensitivity_matrix)), "\n")
-        } else {
-          cat("DEBUG: ERROR - Sensitivity matrix is NULL!\n")
-        }
-        
-        # Store assumptions check if available
-        if (!is.null(sens_obj$assumptions_check)) {
-          values$debug_assumptions <- sens_obj$assumptions_check
-          cat("DEBUG: Assumptions check:\n")
-          print(sens_obj$assumptions_check)
-        }
         
         values$sensitivity_results <- sens_obj
         values$sensitivity_computed <- TRUE
@@ -648,195 +712,56 @@ server <- function(input, output, session) {
         showNotification("✅ Sensitivity analysis completed!", type = "message")
         
       }, error = function(e) {
-        cat("ERROR in sensitivity analysis:", e$message, "\n")
-        cat("ERROR traceback:\n")
-        traceback()
         showNotification(paste("❌ Error in sensitivity analysis:", e$message), type = "error")
       })
     })
   })
   
-  # DEBUG OUTPUTS
+  # Intervention analysis
+  observeEvent(input$run_intervention, {
+    req(values$sensitivity_results, input$target_lambda_change)
+    
+    tryCatch({
+      if (input$intervention_type == "discrete") {
+        interventions <- intervention_analysis_enhanced(
+          values$sensitivity_results,
+          target_lambda_change = input$target_lambda_change,
+          intervention_type = "discrete"
+        )
+      } else {
+        interventions <- intervention_analysis(
+          values$sensitivity_results,
+          target_lambda_change = input$target_lambda_change
+        )
+      }
+      
+      values$intervention_results <- interventions
+      values$intervention_computed <- TRUE
+      
+      showNotification("✅ Intervention analysis completed!", type = "message")
+      
+    }, error = function(e) {
+      showNotification(paste("❌ Error in intervention analysis:", e$message), type = "error")
+    })
+  })
   
-  # Output: Matrix processed flag
+  # Output: Reactive flags
   output$matrix_processed <- reactive({
     values$matrix_processed
   })
   outputOptions(output, "matrix_processed", suspendWhenHidden = FALSE)
   
-  # Output: Sensitivity computed flag
   output$sensitivity_computed <- reactive({
     values$sensitivity_computed
   })
   outputOptions(output, "sensitivity_computed", suspendWhenHidden = FALSE)
   
-  # DEBUG: Original matrix A
-  output$debug_matrix_A <- DT::renderDataTable({
-    req(values$matrix_A)
-    DT::datatable(
-      values$matrix_A,
-      options = list(
-        pageLength = 10,
-        scrollX = TRUE,
-        dom = 't'
-      )
-    ) %>% 
-      DT::formatRound(columns = 1:ncol(values$matrix_A), digits = 3)
+  output$intervention_computed <- reactive({
+    values$intervention_computed
   })
+  outputOptions(output, "intervention_computed", suspendWhenHidden = FALSE)
   
-  # DEBUG: Normalized matrix D
-  output$debug_matrix_D <- DT::renderDataTable({
-    req(values$debug_D)
-    DT::datatable(
-      values$debug_D,
-      options = list(
-        pageLength = 10,
-        scrollX = TRUE,
-        dom = 't'
-      )
-    ) %>% 
-      DT::formatRound(columns = 1:ncol(values$debug_D), digits = 6)
-  })
-  
-  # DEBUG: Total relations matrix T
-  output$debug_matrix_T <- DT::renderDataTable({
-    req(values$debug_T)
-    DT::datatable(
-      values$debug_T,
-      options = list(
-        pageLength = 10,
-        scrollX = TRUE,
-        dom = 't'
-      )
-    ) %>% 
-      DT::formatRound(columns = 1:ncol(values$debug_T), digits = 6)
-  })
-  
-  # DEBUG: Scaling information
-  output$debug_scaling_info <- renderText({
-    req(values$matrix_A, values$debug_scaling_factor)
-    
-    row_sums <- rowSums(values$matrix_A)
-    col_sums <- colSums(values$matrix_A)
-    
-    paste(
-      "Original Matrix A Properties:\n",
-      "Row sums:", paste(round(row_sums, 3), collapse = ", "), "\n",
-      "Column sums:", paste(round(col_sums, 3), collapse = ", "), "\n",
-      "Max row sum:", round(max(row_sums), 3), "\n",
-      "Max column sum:", round(max(col_sums), 3), "\n",
-      "Scaling factor (s):", round(values$debug_scaling_factor, 6), "\n",
-      "\nNormalized Matrix D Properties:\n",
-      "D = A / s\n",
-      "Max row sum in D:", ifelse(!is.null(values$debug_D), round(max(rowSums(values$debug_D)), 6), "N/A"), "\n",
-      "Max column sum in D:", ifelse(!is.null(values$debug_D), round(max(colSums(values$debug_D)), 6), "N/A")
-    )
-  })
-  
-  # DEBUG: Eigenvalue information
-  output$debug_eigenvalue_info <- renderText({
-    req(values$debug_eigenvalues)
-    
-    eigenvals_real <- Re(values$debug_eigenvalues)
-    eigenvals_sorted <- sort(eigenvals_real, decreasing = TRUE)
-    
-    paste(
-      "All Eigenvalues (real parts):\n",
-      paste(round(eigenvals_real, 6), collapse = ", "), "\n",
-      "\nSorted Eigenvalues:\n",
-      paste(round(eigenvals_sorted, 6), collapse = ", "), "\n",
-      "\nDominant eigenvalue (λmax):", round(eigenvals_sorted[1], 6), "\n",
-      "Second largest eigenvalue:", ifelse(length(eigenvals_sorted) > 1, round(eigenvals_sorted[2], 6), "N/A"), "\n",
-      "Spectral radius:", round(max(abs(values$debug_eigenvalues)), 6), "\n",
-      "Number of eigenvalues:", length(values$debug_eigenvalues)
-    )
-  })
-  
-  # DEBUG: Assumptions check
-  output$debug_assumptions <- renderText({
-    if (!is.null(values$debug_assumptions)) {
-      paste(
-        "Theorem 1 Assumptions Check:\n",
-        "Valid:", values$debug_assumptions$valid, "\n",
-        "Message:", values$debug_assumptions$message, "\n",
-        "Dominant is simple:", values$debug_assumptions$dominant_is_simple, "\n",
-        "Matrix is irreducible:", values$debug_assumptions$matrix_is_irreducible, "\n",
-        "Well conditioned:", values$debug_assumptions$well_conditioned, "\n",
-        "Eigenvalue gaps:", ifelse(!is.null(values$debug_assumptions$eigenvalue_gaps), 
-                                   round(values$debug_assumptions$eigenvalue_gaps, 6), "N/A"), "\n",
-        "Condition number:", ifelse(!is.null(values$debug_assumptions$condition_number), 
-                                    round(values$debug_assumptions$condition_number, 2), "N/A")
-      )
-    } else {
-      "Assumptions check not available"
-    }
-  })
-  
-  # DEBUG: Sensitivity matrix
-  output$debug_sensitivity_matrix <- DT::renderDataTable({
-    req(values$sensitivity_results, values$sensitivity_results$sensitivity_matrix)
-    
-    sens_matrix <- values$sensitivity_results$sensitivity_matrix
-    
-    DT::datatable(
-      sens_matrix,
-      options = list(
-        pageLength = 10,
-        scrollX = TRUE,
-        dom = 't'
-      )
-    ) %>% 
-      DT::formatRound(columns = 1:ncol(sens_matrix), digits = 8)
-  })
-  
-  # DEBUG: Sensitivity statistics
-  output$debug_sensitivity_stats <- renderText({
-    req(values$sensitivity_results, values$sensitivity_results$sensitivity_matrix)
-    
-    sens_matrix <- values$sensitivity_results$sensitivity_matrix
-    sens_values <- as.vector(sens_matrix)
-    sens_values_clean <- sens_values[!is.na(sens_values)]
-    
-    paste(
-      "Sensitivity Matrix Debug Info:\n",
-      "Dimensions:", paste(dim(sens_matrix), collapse = " x "), "\n",
-      "Total elements:", length(sens_values), "\n",
-      "NA elements:", sum(is.na(sens_values)), "\n",
-      "Finite elements:", sum(is.finite(sens_values), na.rm = TRUE), "\n",
-      "Range (all values):", paste(round(range(sens_values, na.rm = TRUE), 8), collapse = " to "), "\n",
-      "Range (finite only):", paste(round(range(sens_values_clean[is.finite(sens_values_clean)]), 8), collapse = " to "), "\n",
-      "Mean:", round(mean(sens_values_clean), 8), "\n",
-      "Std Dev:", round(sd(sens_values_clean), 8), "\n",
-      "Positive values:", sum(sens_values_clean > 0), "\n",
-      "Negative values:", sum(sens_values_clean < 0), "\n",
-      "Zero values:", sum(abs(sens_values_clean) < 1e-10), "\n",
-      "Max absolute:", round(max(abs(sens_values_clean)), 8)
-    )
-  })
-  
-  # DEBUG: Sensitivity object structure
-  output$debug_sensitivity_object <- renderText({
-    req(values$sensitivity_results)
-    
-    obj <- values$sensitivity_results
-    
-    paste(
-      "Sensitivity Object Structure:\n",
-      "Class:", paste(class(obj), collapse = ", "), "\n",
-      "Names:", paste(names(obj), collapse = ", "), "\n",
-      "n:", obj$n, "\n",
-      "Factor names:", paste(obj$factor_names, collapse = ", "), "\n",
-      "Lambda max:", round(obj$lambda_max, 8), "\n",
-      "Computation method:", obj$computation_method %||% "NULL", "\n",
-      "Sensitivity matrix class:", class(obj$sensitivity_matrix), "\n",
-      "Sensitivity matrix is null:", is.null(obj$sensitivity_matrix), "\n",
-      "A matrix dimensions:", paste(dim(obj$A), collapse = " x "), "\n",
-      "D matrix dimensions:", paste(dim(obj$D), collapse = " x "), "\n",
-      "T matrix dimensions:", paste(dim(obj$T), collapse = " x ")
-    )
-  })
-  
-  # Regular outputs (unchanged)
+  # Matrix preview and info
   output$matrix_preview <- DT::renderDataTable({
     req(values$matrix_A)
     DT::datatable(
@@ -850,7 +775,6 @@ server <- function(input, output, session) {
       DT::formatRound(columns = 1:ncol(values$matrix_A), digits = 2)
   })
   
-  # Output: Matrix info
   output$matrix_info <- renderText({
     req(values$matrix_A)
     paste(
@@ -861,7 +785,7 @@ server <- function(input, output, session) {
     )
   })
   
-  # Output: Spectral results
+  # Spectral analysis outputs
   output$spectral_results <- renderText({
     req(values$spectral_results)
     
@@ -890,7 +814,6 @@ server <- function(input, output, session) {
     return(result_text)
   })
   
-  # Output: Spectral summary table
   output$spectral_summary_table <- renderTable({
     req(values$spectral_results)
     
@@ -906,13 +829,9 @@ server <- function(input, output, session) {
     return(summary_data)
   }, striped = TRUE, hover = TRUE, bordered = TRUE)
   
-  # Output: Sensitivity statistics
+  # Sensitivity analysis outputs
   output$sensitivity_stats <- renderText({
     req(values$sensitivity_results)
-    
-    # DEBUG: Add debug output here too
-    cat("DEBUG in sensitivity_stats: sensitivity_results exists\n")
-    cat("DEBUG: sensitivity_matrix is null?", is.null(values$sensitivity_results$sensitivity_matrix), "\n")
     
     if (is.null(values$sensitivity_results$sensitivity_matrix)) {
       return("ERROR: Sensitivity matrix is NULL")
@@ -933,12 +852,10 @@ server <- function(input, output, session) {
         "Near-zero:", stats$n_zero, "(", round(100*stats$n_zero/stats$total_elements, 1), "%)"
       )
     }, error = function(e) {
-      cat("ERROR in sensitivity_stats:", e$message, "\n")
       paste("ERROR computing sensitivity statistics:", e$message)
     })
   })
   
-  # Output: Sensitivity classification plot
   output$sensitivity_classification_plot <- renderPlot({
     req(values$sensitivity_results)
     
@@ -974,21 +891,15 @@ server <- function(input, output, session) {
              y = "Number of Relationships") +
         ylim(0, max(classification_data$Count) * 1.2)
     }, error = function(e) {
-      cat("ERROR in sensitivity_classification_plot:", e$message, "\n")
       ggplot() + 
         annotate("text", x = 0.5, y = 0.5, label = paste("Plot error:", e$message), size = 6) +
         theme_void()
     })
   })
   
-  # Output: Sensitivity heatmap
+  # Visualization outputs
   output$sensitivity_heatmap <- renderPlot({
     req(values$sensitivity_results)
-    
-    # DEBUG: Add extensive debugging here
-    cat("DEBUG in sensitivity_heatmap: Starting\n")
-    cat("DEBUG: sensitivity_results exists:", !is.null(values$sensitivity_results), "\n")
-    cat("DEBUG: sensitivity_matrix exists:", !is.null(values$sensitivity_results$sensitivity_matrix), "\n")
     
     if (is.null(values$sensitivity_results$sensitivity_matrix)) {
       return(ggplot() + 
@@ -999,16 +910,7 @@ server <- function(input, output, session) {
     
     tryCatch({
       sens_matrix <- values$sensitivity_results$sensitivity_matrix
-      cat("DEBUG: Sensitivity matrix dimensions:", dim(sens_matrix), "\n")
-      cat("DEBUG: Sensitivity matrix class:", class(sens_matrix), "\n")
-      cat("DEBUG: Has rownames:", !is.null(rownames(sens_matrix)), "\n")
-      cat("DEBUG: Has colnames:", !is.null(colnames(sens_matrix)), "\n")
       
-      # Print matrix values for debugging
-      cat("DEBUG: Sensitivity matrix values:\n")
-      print(sens_matrix)
-      
-      # Check for reshape2 package
       if (!requireNamespace("reshape2", quietly = TRUE)) {
         return(ggplot() + 
                  annotate("text", x = 0.5, y = 0.5, label = "reshape2 package not available", size = 6) +
@@ -1016,14 +918,8 @@ server <- function(input, output, session) {
       }
       
       sens_melted <- reshape2::melt(sens_matrix)
-      cat("DEBUG: Melted data dimensions:", dim(sens_melted), "\n")
-      cat("DEBUG: Melted data columns:", names(sens_melted), "\n")
-      
       names(sens_melted) <- c("From_Factor", "To_Factor", "Sensitivity")
       sens_melted <- sens_melted[!is.na(sens_melted$Sensitivity), ]
-      
-      cat("DEBUG: After removing NA, dimensions:", dim(sens_melted), "\n")
-      cat("DEBUG: Sensitivity range:", range(sens_melted$Sensitivity), "\n")
       
       if (nrow(sens_melted) == 0) {
         return(ggplot() + 
@@ -1053,12 +949,9 @@ server <- function(input, output, session) {
         p <- p + geom_text(aes(label = round(Sensitivity, 3)), size = 3, color = "black")
       }
       
-      cat("DEBUG: Heatmap created successfully\n")
       return(p)
       
     }, error = function(e) {
-      cat("ERROR in sensitivity_heatmap:", e$message, "\n")
-      traceback()
       ggplot() +
         annotate("text", x = 0.5, y = 0.5, 
                  label = paste("Sensitivity heatmap\nerror:\n", e$message),
@@ -1068,16 +961,12 @@ server <- function(input, output, session) {
     })
   })
   
-  # Output: DEMATEL Interrelationship Map
   output$interrelationship_map <- renderPlot({
     req(values$sensitivity_results)
-    
-    cat("DEBUG in interrelationship_map: Starting\n")
     
     tryCatch({
       create_dematel_interrelationship_map(values$sensitivity_results)
     }, error = function(e) {
-      cat("ERROR in interrelationship_map:", e$message, "\n")
       ggplot() +
         annotate("text", x = 0.5, y = 0.5, 
                  label = paste("Interrelationship map\nerror:\n", e$message),
@@ -1087,11 +976,8 @@ server <- function(input, output, session) {
     })
   })
   
-  # Output: Sensitivity distribution
   output$sensitivity_distribution <- renderPlot({
     req(values$sensitivity_results)
-    
-    cat("DEBUG in sensitivity_distribution: Starting\n")
     
     tryCatch({
       if (is.null(values$sensitivity_results$sensitivity_matrix)) {
@@ -1102,9 +988,6 @@ server <- function(input, output, session) {
       
       sens_values <- as.vector(values$sensitivity_results$sensitivity_matrix)
       sens_values <- sens_values[!is.na(sens_values)]
-      
-      cat("DEBUG: Distribution - number of values:", length(sens_values), "\n")
-      cat("DEBUG: Distribution - range:", range(sens_values), "\n")
       
       if (length(sens_values) == 0) {
         return(ggplot() + 
@@ -1124,7 +1007,6 @@ server <- function(input, output, session) {
           y = "Frequency"
         )
     }, error = function(e) {
-      cat("ERROR in sensitivity_distribution:", e$message, "\n")
       ggplot() +
         annotate("text", x = 0.5, y = 0.5, 
                  label = paste("Distribution plot\nerror:\n", e$message),
@@ -1134,11 +1016,8 @@ server <- function(input, output, session) {
     })
   })
   
-  # Output: Top relationships plot
   output$top_relationships_plot <- renderPlot({
     req(values$sensitivity_results)
-    
-    cat("DEBUG in top_relationships_plot: Starting\n")
     
     tryCatch({
       if (is.null(values$sensitivity_results$sensitivity_matrix)) {
@@ -1149,8 +1028,6 @@ server <- function(input, output, session) {
       
       critical_rels <- identify_critical_relationships(values$sensitivity_results, 
                                                        threshold_percentile = input$critical_threshold)
-      
-      cat("DEBUG: Critical relationships found:", nrow(critical_rels), "\n")
       
       if (nrow(critical_rels) > 0) {
         top_10 <- head(critical_rels, 10)
@@ -1182,7 +1059,6 @@ server <- function(input, output, session) {
           labs(title = "Top Critical Relationships")
       }
     }, error = function(e) {
-      cat("ERROR in top_relationships_plot:", e$message, "\n")
       ggplot() +
         annotate("text", x = 0.5, y = 0.5, 
                  label = paste("Critical relationships plot\nerror:\n", e$message),
@@ -1192,11 +1068,9 @@ server <- function(input, output, session) {
     })
   })
   
-  # Output: Critical relationships table
+  # Critical relationships table
   output$critical_relationships_table <- DT::renderDataTable({
     req(values$sensitivity_results)
-    
-    cat("DEBUG in critical_relationships_table: Starting\n")
     
     tryCatch({
       if (is.null(values$sensitivity_results$sensitivity_matrix)) {
@@ -1205,8 +1079,6 @@ server <- function(input, output, session) {
       
       critical_rels <- identify_critical_relationships(values$sensitivity_results, 
                                                        threshold_percentile = input$critical_threshold)
-      
-      cat("DEBUG: Critical relationships table - found:", nrow(critical_rels), "relationships\n")
       
       if (nrow(critical_rels) > 0) {
         display_data <- critical_rels[, c("from_factor", "to_factor", "sensitivity", 
@@ -1219,7 +1091,7 @@ server <- function(input, output, session) {
           options = list(
             pageLength = 15,
             scrollX = TRUE,
-            order = list(list(3, "desc"))  # Order by absolute sensitivity
+            order = list(list(3, "desc"))
           )
         ) %>%
           DT::formatRound(columns = c("Sensitivity", "Abs. Sensitivity"), digits = 6) %>%
@@ -1234,10 +1106,152 @@ server <- function(input, output, session) {
         DT::datatable(data.frame(Message = "No critical relationships found at this threshold"))
       }
     }, error = function(e) {
-      cat("ERROR in critical_relationships_table:", e$message, "\n")
       DT::datatable(data.frame(Error = paste("Error generating table:", e$message)))
     })
   })
+  
+  # Intervention analysis table
+  output$intervention_table <- DT::renderDataTable({
+    req(values$intervention_results)
+    
+    tryCatch({
+      display_data <- values$intervention_results
+      
+      if (input$intervention_type == "discrete") {
+        display_cols <- c("from_factor", "to_factor", "current_aij", "required_change", 
+                          "new_aij", "actual_lambda_change", "target_achievement", "feasible")
+        col_names <- c("From Factor", "To Factor", "Current Value", "Change", 
+                       "New Value", "Lambda Change", "Target Achievement", "Feasible")
+      } else {
+        display_cols <- c("from_factor", "to_factor", "current_aij", "required_change", 
+                          "new_aij", "efficiency", "feasible")
+        col_names <- c("From Factor", "To Factor", "Current Value", "Required Change", 
+                       "New Value", "Efficiency", "Feasible")
+      }
+      
+      display_data <- display_data[, display_cols]
+      names(display_data) <- col_names
+      
+      DT::datatable(
+        head(display_data, 50),  # Limit to top 50 results
+        options = list(
+          pageLength = 15,
+          scrollX = TRUE
+        )
+      ) %>%
+        DT::formatRound(columns = which(sapply(display_data, is.numeric)), digits = 4) %>%
+        DT::formatStyle(
+          "Feasible",
+          backgroundColor = DT::styleEqual(
+            c(TRUE, FALSE),
+            c("#d4edda", "#f8d7da")
+          )
+        )
+    }, error = function(e) {
+      DT::datatable(data.frame(Error = paste("Error generating intervention table:", e$message)))
+    })
+  })
+  
+  # Executive summary for report
+  output$executive_summary <- renderText({
+    req(values$sensitivity_results)
+    
+    tryCatch({
+      stats <- get_sensitivity_stats(values$sensitivity_results)
+      critical_90 <- identify_critical_relationships(values$sensitivity_results, 90)
+      critical_95 <- identify_critical_relationships(values$sensitivity_results, 95)
+      
+      summary_text <- paste(
+        "EXECUTIVE SUMMARY\n",
+        "================\n\n",
+        "System Overview:\n",
+        "- Matrix size:", values$spectral_results$n, "×", values$spectral_results$n, "\n",
+        "- Dominant eigenvalue (λmax):", round(values$spectral_results$lambda_max, 6), "\n",
+        "- System stability:", ifelse(values$spectral_results$lambda_max > 1, 
+                                      "Potentially amplifying", "Stable"), "\n\n",
+        
+        "Sensitivity Analysis:\n",
+        "- Total relationships analyzed:", stats$total_elements, "\n",
+        "- Amplifying relationships:", stats$n_positive, 
+        " (", round(100*stats$n_positive/stats$total_elements, 1), "%)\n",
+        "- Dampening relationships:", stats$n_negative, 
+        " (", round(100*stats$n_negative/stats$total_elements, 1), "%)\n",
+        "- Mean absolute sensitivity:", round(stats$mean_abs, 6), "\n\n",
+        
+        "Critical Relationships:\n",
+        "- 90th percentile threshold:", nrow(critical_90), "relationships\n",
+        "- 95th percentile threshold:", nrow(critical_95), "relationships\n"
+      )
+      
+      if (nrow(critical_95) > 0) {
+        top_critical <- head(critical_95, 3)
+        summary_text <- paste(summary_text, "\nTop 3 Most Critical:\n")
+        for (i in 1:nrow(top_critical)) {
+          summary_text <- paste(summary_text, 
+                                paste0(i, ". ", top_critical$from_factor[i], " → ", 
+                                       top_critical$to_factor[i], ": ", 
+                                       round(top_critical$sensitivity[i], 6), 
+                                       " (", top_critical$interpretation[i], ")\n"))
+        }
+      }
+      
+      return(summary_text)
+      
+    }, error = function(e) {
+      paste("Error generating executive summary:", e$message)
+    })
+  })
+  
+  # Download handlers
+  output$download_spectral <- downloadHandler(
+    filename = function() {
+      paste0("spectral_analysis_", Sys.Date(), ".csv")
+    },
+    content = function(file) {
+      if (!is.null(values$spectral_results)) {
+        # Create a summary data frame
+        summary_df <- data.frame(
+          Metric = c("Dominant_Eigenvalue", "Spectral_Radius", "Condition_Number", "System_Size"),
+          Value = c(
+            values$spectral_results$lambda_max,
+            values$spectral_results$spectral_radius %||% NA,
+            values$spectral_results$condition_number %||% NA,
+            values$spectral_results$n
+          )
+        )
+        write.csv(summary_df, file, row.names = FALSE)
+      }
+    }
+  )
+  
+  output$download_critical <- downloadHandler(
+    filename = function() {
+      paste0("critical_relationships_", Sys.Date(), ".csv")
+    },
+    content = function(file) {
+      if (!is.null(values$sensitivity_results)) {
+        critical_rels <- identify_critical_relationships(values$sensitivity_results, 
+                                                         threshold_percentile = input$critical_threshold)
+        write.csv(critical_rels, file, row.names = FALSE)
+      }
+    }
+  )
+  
+  output$download_interventions <- downloadHandler(
+    filename = function() {
+      paste0("intervention_analysis_", Sys.Date(), ".csv")
+    },
+    content = function(file) {
+      if (!is.null(values$intervention_results)) {
+        write.csv(values$intervention_results, file, row.names = FALSE)
+      }
+    }
+  )
+  
+  # Helper function for null coalescing
+  `%||%` <- function(x, y) {
+    if (is.null(x)) y else x
+  }
 }
 
 # Run the application

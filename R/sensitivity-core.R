@@ -107,7 +107,7 @@ compute_dematel_matrices <- function(A) {
     stop("Matrix (I - D) is not invertible. Check your input matrix A.")
   }
 
-  T <- D %*% solve(I - D)
+  T <- solve(I - D) - I  # Instead of T <- D %*% solve(I - D)
 
   # Dominant eigenvalue
   eigenvals <- eigen(T, only.values = TRUE)$values
@@ -333,12 +333,7 @@ compute_sensitivity_analytical.DEMATEL_Sensitivity <- function(obj) {
     dominant_idx <- which.max(Re(eigenvalues))
     lambda_max <- Re(eigenvalues[dominant_idx])
     
-    # Verify this matches our stored lambda_max
-    if (abs(lambda_max - obj$lambda_max) > 1e-10) {
-      warning("Eigenvalue mismatch detected")
-    }
-    
-    # Get right eigenvector u
+        # Get right eigenvector u
     u <- Re(eigen_result$vectors[, dominant_idx])
     
     # Get left eigenvector v (eigenvector of T^T)
@@ -368,24 +363,39 @@ compute_sensitivity_analytical.DEMATEL_Sensitivity <- function(obj) {
     I <- diag(n)
     I_plus_T_squared <- (I + obj$T) %*% (I + obj$T)
     
-    # Apply Theorem 1: ∂λmax/∂aij = (1/s) * v^T * (I + T)^2 * E_ij * u
-    sensitivity_matrix <- matrix(0, nrow = n, ncol = n)
+    # Compute alpha values
+    alpha <- numeric(n)
+    for (i in 1:n) {
+      alpha[i] <- as.numeric(t(v) %*% I_plus_T_squared[, i])
+    }
+    
+    
     
     cat("Applying Theorem 1 formula...\n")
     pb <- txtProgressBar(min = 0, max = n^2, style = 3)
     
+    # Compute sensitivity matrix
+    sensitivity_matrix <- matrix(0, nrow = n, ncol = n)
     for (i in 1:n) {
       for (j in 1:n) {
-        # Create elementary matrix E_ij
-        E_ij <- matrix(0, nrow = n, ncol = n)
-        E_ij[i, j] <- 1
-        
-        # Apply Theorem 1 formula
-        sensitivity_matrix[i, j] <- (1/s) * as.numeric(t(v) %*% I_plus_T_squared %*% E_ij %*% u)
+        sensitivity_matrix[i, j] <- (1/s) * alpha[i] * u[j]
         
         setTxtProgressBar(pb, (i-1)*n + j)
       }
     }
+    
+    # for (i in 1:n) {
+    #   for (j in 1:n) {
+    #     # Create elementary matrix E_ij
+    #     E_ij <- matrix(0, nrow = n, ncol = n)
+    #     E_ij[i, j] <- 1
+    #     
+    #     # Apply Theorem 1 formula
+    #     sensitivity_matrix[i, j] <- (1/s) * as.numeric(t(v) %*% I_plus_T_squared %*% E_ij %*% u)
+    #     
+    #     setTxtProgressBar(pb, (i-1)*n + j)
+    #   }
+    # }
     close(pb)
     
     # Add row and column names

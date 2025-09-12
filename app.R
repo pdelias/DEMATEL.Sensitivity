@@ -721,7 +721,8 @@ server <- function(input, output, session) {
         req(input$file_A)
         
         # Read uploaded file
-        A_raw <- read.csv(input$file_A$datapath, header = input$header_A, stringsAsFactors = FALSE)
+        A_raw <- read_csv_robust(input$file_A$datapath, header = input$header_A)
+       # A_raw <- read.csv(input$file_A$datapath, header = input$header_A, stringsAsFactors = FALSE)
         A <- as.matrix(A_raw)
         mode(A) <- "numeric"
         
@@ -1759,6 +1760,50 @@ server <- function(input, output, session) {
     if (is.null(x)) y else x
   }
 }
+# Add this function before your server function in app.R
+
+#' Robust CSV reader that detects separator automatically
+#' @param filepath Path to the CSV file
+#' @param header Whether file has header
+#' @return Matrix with numeric data
+read_csv_robust <- function(filepath, header = FALSE) {
+  
+  # Read first few lines to detect separator
+  sample_lines <- readLines(filepath, n = 3)
+  
+  # Count occurrences of common separators
+  comma_count <- sum(grepl(",", sample_lines))
+  semicolon_count <- sum(grepl(";", sample_lines))
+  tab_count <- sum(grepl("\t", sample_lines))
+  
+  # Determine most likely separator
+  separator <- if (semicolon_count > comma_count && semicolon_count > tab_count) {
+    ";"
+  } else if (tab_count > comma_count && tab_count > semicolon_count) {
+    "\t"
+  } else {
+    ","
+  }
+  
+  cat("Detected separator:", ifelse(separator == "\t", "TAB", separator), "\n")
+  
+  # Read with detected separator
+  data_raw <- read.csv(filepath, header = header, stringsAsFactors = FALSE, 
+                       sep = separator, check.names = FALSE)
+  
+  # Convert to numeric matrix
+  data_matrix <- as.matrix(data_raw)
+  mode(data_matrix) <- "numeric"
+  
+  # Final validation
+  if (any(is.na(data_matrix))) {
+    stop("Matrix contains non-numeric values or missing data")
+  }
+  
+  return(data_matrix)
+}
+
+
 
 # Run the application
 cat("Starting complete DEMATEL Sensitivity Analysis app...\n")

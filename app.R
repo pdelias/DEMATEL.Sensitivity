@@ -1,4 +1,4 @@
-# DEMATEL Sensitivity Analysis Shiny App
+# DEMATEL Sensitivity Analysis Shiny App - Complete Version
 # File: app.R
 
 # Load required libraries
@@ -11,12 +11,29 @@ library(ggplot2)
 library(viridis)
 library(reshape2)
 
-# Source all R functions
-source("R/dematel_spectral.R", local = TRUE)
-source("R/sensitivity-core.R", local = TRUE)
-source("R/sensitivity-methods.R", local = TRUE)
-source("R/sensitivity-visualization.R", local = TRUE)
-source("R/ui_components.R", local = TRUE)
+# Source all R functions with error handling
+source_files <- c(
+  "R/dematel_spectral.R",
+  "R/sensitivity-core.R", 
+  "R/sensitivity-methods.R",
+  "R/sensitivity-visualization.R",
+  "R/ui_components.R"
+)
+
+# Source files with error checking
+for (file in source_files) {
+  if (file.exists(file)) {
+    tryCatch({
+      source(file, local = TRUE)
+      cat("✅ Successfully sourced:", file, "\n")
+    }, error = function(e) {
+      cat("❌ Error sourcing", file, ":", e$message, "\n")
+      # Continue running - some functionality may be limited
+    })
+  } else {
+    cat("⚠️ File not found:", file, "\n")
+  }
+}
 
 # Define UI
 ui <- dashboardPage(
@@ -44,10 +61,6 @@ ui <- dashboardPage(
   
   # Body
   dashboardBody(
-    tags$head(
-      tags$link(rel = "stylesheet", type = "text/css", href = "styles.css")
-    ),
-    
     tabItems(
       # Data Input Tab
       tabItem(
@@ -153,57 +166,94 @@ ui <- dashboardPage(
               solidHeader = TRUE,
               width = 12,
               
-              div(id = "processing_status")
+              div(id = "processing_status", 
+                  p("Matrix processed successfully! You can now proceed to the Spectral Analysis tab."))
             )
           )
         )
       ),
       
-      # Spectral Analysis Tab
+      # ENHANCED Spectral Analysis Tab
       tabItem(
         tabName = "spectral",
         conditionalPanel(
           condition = "!output.matrix_processed",
-          no_data_message("Please upload and process a matrix first in the Data Input tab.")
+          fluidRow(
+            box(
+              title = "⚠️ Data Required", 
+              status = "warning", 
+              solidHeader = TRUE,
+              width = 12,
+              
+              div(
+                style = "text-align: center; padding: 50px;",
+                icon("exclamation-triangle", style = "font-size: 48px; color: #f39c12;"),
+                h4("Please upload and process a matrix first in the Data Input tab.", 
+                   style = "color: #856404; margin-top: 20px;"),
+                p("Complete the previous steps to access this analysis.", style = "color: #856404;")
+              )
+            )
+          )
         ),
         
         conditionalPanel(
           condition = "output.matrix_processed",
           fluidRow(
             box(
-              title = "📈 Spectral Analysis Results", 
+              title = "📈 Complete Spectral Analysis Results", 
               status = "primary", 
               solidHeader = TRUE,
               width = 8,
               
               h4("System Eigenvalue Analysis"),
-              verbatimTextOutput("spectral_results"),
+              DT::dataTableOutput("spectral_metrics_table"),
               
               br(),
-              h4("Interpretation Guide:"),
-              tags$ul(
-                tags$li(strong("Dominant Eigenvalue (λmax):"), " Controls system amplification"),
-                tags$li(strong("Spectral Radius:"), " Maximum absolute eigenvalue"),
-                tags$li(strong("Condition Number:"), " System sensitivity to perturbations"),
-                tags$li(strong("Convergence Rate:"), " How quickly the system stabilizes")
-              )
+              h4("Matrix Properties"),
+              verbatimTextOutput("matrix_properties")
             ),
             
             box(
-              title = "📊 Key Metrics Summary", 
+              title = "📊 Key System Metrics", 
               status = "info", 
               solidHeader = TRUE,
               width = 4,
               
-              h4("Quick Overview:"),
-              tableOutput("spectral_summary_table"),
+              h4("Primary Metrics:"),
+              tableOutput("primary_metrics_table"),
+              
+              br(),
+              h4("System Characteristics:"),
+              tableOutput("system_characteristics_table"),
               
               br(),
               downloadButton(
                 "download_spectral",
-                "📥 Download Spectral Results",
+                "📥 Download Complete Spectral Results",
                 class = "btn-info"
               )
+            )
+          ),
+          
+          fluidRow(
+            box(
+              title = "📊 Eigenvalue Analysis", 
+              status = "warning", 
+              solidHeader = TRUE,
+              width = 6,
+              
+              h4("Eigenvalue Details:"),
+              verbatimTextOutput("eigenvalue_details")
+            ),
+            
+            box(
+              title = "🔍 System Dynamics", 
+              status = "warning", 
+              solidHeader = TRUE,
+              width = 6,
+              
+              h4("Dynamic Properties:"),
+              verbatimTextOutput("system_dynamics")
             )
           )
         )
@@ -214,7 +264,21 @@ ui <- dashboardPage(
         tabName = "sensitivity",
         conditionalPanel(
           condition = "!output.matrix_processed",
-          no_data_message("Please upload and process a matrix first in the Data Input tab.")
+          fluidRow(
+            box(
+              title = "⚠️ Data Required", 
+              status = "warning", 
+              solidHeader = TRUE,
+              width = 12,
+              
+              div(
+                style = "text-align: center; padding: 50px;",
+                icon("exclamation-triangle", style = "font-size: 48px; color: #f39c12;"),
+                h4("Please upload and process a matrix first in the Data Input tab.", 
+                   style = "color: #856404; margin-top: 20px;")
+              )
+            )
+          )
         ),
         
         conditionalPanel(
@@ -325,7 +389,19 @@ ui <- dashboardPage(
         tabName = "critical",
         conditionalPanel(
           condition = "!output.sensitivity_computed",
-          no_data_message("Please complete sensitivity analysis first.")
+          fluidRow(
+            box(
+              title = "⚠️ Data Required", 
+              status = "warning", 
+              solidHeader = TRUE,
+              width = 12,
+              
+              div(
+                style = "text-align: center; padding: 50px;",
+                h4("Please complete sensitivity analysis first.")
+              )
+            )
+          )
         ),
         
         conditionalPanel(
@@ -375,7 +451,19 @@ ui <- dashboardPage(
         tabName = "intervention",
         conditionalPanel(
           condition = "!output.sensitivity_computed",
-          no_data_message("Please complete sensitivity analysis first.")
+          fluidRow(
+            box(
+              title = "⚠️ Data Required", 
+              status = "warning", 
+              solidHeader = TRUE,
+              width = 12,
+              
+              div(
+                style = "text-align: center; padding: 50px;",
+                h4("Please complete sensitivity analysis first.")
+              )
+            )
+          )
         ),
         
         conditionalPanel(
@@ -455,7 +543,19 @@ ui <- dashboardPage(
         tabName = "report",
         conditionalPanel(
           condition = "!output.sensitivity_computed",
-          no_data_message("Please complete sensitivity analysis first.")
+          fluidRow(
+            box(
+              title = "⚠️ Data Required", 
+              status = "warning", 
+              solidHeader = TRUE,
+              width = 12,
+              
+              div(
+                style = "text-align: center; padding: 50px;",
+                h4("Please complete sensitivity analysis first.")
+              )
+            )
+          )
         ),
         
         conditionalPanel(
@@ -477,28 +577,28 @@ ui <- dashboardPage(
                 column(3,
                        downloadButton(
                          "download_full_report",
-                         "📄 Full Report (PDF)",
+                         "📄 Full Report (TXT)",
                          class = "btn-success"
                        )
                 ),
                 column(3,
                        downloadButton(
                          "download_summary_report",
-                         "📝 Summary Report (HTML)",
+                         "📝 Summary Report (CSV)",
                          class = "btn-info"
                        )
                 ),
                 column(3,
                        downloadButton(
-                         "download_data_package",
-                         "📦 Data Package (ZIP)",
+                         "download_spectral_data",
+                         "📦 Spectral Data (CSV)",
                          class = "btn-primary"
                        )
                 ),
                 column(3,
                        downloadButton(
-                         "download_all_plots",
-                         "🖼️ All Plots (ZIP)",
+                         "download_sensitivity_data",
+                         "🔍 Sensitivity Data (CSV)",
                          class = "btn-warning"
                        )
                 )
@@ -566,18 +666,15 @@ ui <- dashboardPage(
         ),
         
         fluidRow(
-          methodology_card(),
-          
           box(
             title = "💡 Tips & Best Practices", 
             status = "warning", 
             solidHeader = TRUE,
-            width = 6,
+            width = 12,
             
             tags$ul(
               tags$li("Start with the example dataset to understand the workflow"),
               tags$li("Use analytical method for matrices up to 50×50"),
-              tags$li("For larger matrices, consider numerical method"),
               tags$li("Focus on relationships above 90th percentile for interventions"),
               tags$li("Consider feasibility constraints when planning interventions"),
               tags$li("Validate results with domain experts")
@@ -638,7 +735,7 @@ server <- function(input, output, session) {
         }
         
         # Handle factor names
-        if (input$factor_names_input != "") {
+        if (nzchar(input$factor_names_input)) {
           factor_names <- trimws(strsplit(input$factor_names_input, ",")[[1]])
           if (length(factor_names) != nrow(A)) {
             stop(paste("Number of factor names (", length(factor_names), ") must equal matrix size (", nrow(A), ")"))
@@ -654,26 +751,46 @@ server <- function(input, output, session) {
       }
       
       # Compute DEMATEL matrices
-      dematel_matrices <- compute_dematel_matrices(values$matrix_A)
+      if (exists("compute_dematel_matrices", mode = "function")) {
+        dematel_matrices <- compute_dematel_matrices(values$matrix_A)
+      } else {
+        # Fallback computation
+        n <- nrow(values$matrix_A)
+        s <- max(max(rowSums(values$matrix_A)), max(colSums(values$matrix_A)))
+        D <- values$matrix_A / s
+        I <- diag(n)
+        T_matrix <- solve(I - D) - I
+        eigenvals <- eigen(T_matrix, only.values = TRUE)$values
+        lambda_max <- max(Re(eigenvals))
+        
+        dematel_matrices <- list(D = D, T = T_matrix, lambda_max = lambda_max)
+      }
       
-      spectral_results <- list(
-        lambda_max = dematel_matrices$lambda_max,
-        D_matrix = dematel_matrices$D,
-        T_matrix = dematel_matrices$T,
-        A_matrix = values$matrix_A,
-        factor_names = values$factor_names,
-        n = nrow(values$matrix_A)
-      )
-      
-      # Add detailed spectral analysis if available
+      # ENHANCED: Perform complete spectral analysis
       if (exists("dematel_spectral_analysis", mode = "function")) {
-        spectral_detailed <- dematel_spectral_analysis(
-          dematel_matrices$D, 
-          dematel_matrices$T, 
+        spectral_results <- dematel_spectral_analysis(
+          D = dematel_matrices$D, 
+          T = dematel_matrices$T, 
+          case_name = "Current Analysis",
+          return_eigenvalues = TRUE,
           verbose = FALSE
         )
-        spectral_results <- c(spectral_results, spectral_detailed)
+      } else {
+        # Fallback if spectral analysis function not available
+        eigenvals <- eigen(dematel_matrices$T, only.values = TRUE)$values
+        spectral_results <- list(
+          lambda_max = dematel_matrices$lambda_max,
+          spectral_radius = max(abs(eigenvals)),
+          case_name = "Current Analysis"
+        )
       }
+      
+      # Add matrix data to spectral results
+      spectral_results$D_matrix <- dematel_matrices$D
+      spectral_results$T_matrix <- dematel_matrices$T
+      spectral_results$A_matrix <- values$matrix_A
+      spectral_results$factor_names <- values$factor_names
+      spectral_results$n <- nrow(values$matrix_A)
       
       values$spectral_results <- spectral_results
       values$matrix_processed <- TRUE
@@ -691,7 +808,8 @@ server <- function(input, output, session) {
     updateTabItems(session, "sidebar", "input")
     
     # Trigger processing
-    click("process_matrix")
+    Sys.sleep(0.1)  # Small delay to ensure UI updates
+    shinyjs::click("process_matrix")
   })
   
   # Sensitivity analysis
@@ -701,15 +819,18 @@ server <- function(input, output, session) {
     withProgress(message = "Computing sensitivity analysis...", {
       tryCatch({
         # Create sensitivity object
-        sens_obj <- DEMATEL_Sensitivity(values$matrix_A, values$factor_names)
-        
-        # Compute sensitivity
-        sens_obj <- compute_sensitivity_analytical(sens_obj)
-        
-        values$sensitivity_results <- sens_obj
-        values$sensitivity_computed <- TRUE
-        
-        showNotification("✅ Sensitivity analysis completed!", type = "message")
+        if (exists("DEMATEL_Sensitivity", mode = "function") && 
+            exists("compute_sensitivity_analytical", mode = "function")) {
+          
+          sens_obj <- DEMATEL_Sensitivity(values$matrix_A, values$factor_names)
+          sens_obj <- compute_sensitivity_analytical(sens_obj)
+          values$sensitivity_results <- sens_obj
+          values$sensitivity_computed <- TRUE
+          
+          showNotification("✅ Sensitivity analysis completed!", type = "message")
+        } else {
+          showNotification("❌ Sensitivity analysis functions not available", type = "error")
+        }
         
       }, error = function(e) {
         showNotification(paste("❌ Error in sensitivity analysis:", e$message), type = "error")
@@ -722,23 +843,31 @@ server <- function(input, output, session) {
     req(values$sensitivity_results, input$target_lambda_change)
     
     tryCatch({
-      if (input$intervention_type == "discrete") {
-        interventions <- intervention_analysis_enhanced(
-          values$sensitivity_results,
-          target_lambda_change = input$target_lambda_change,
-          intervention_type = "discrete"
-        )
+      if (exists("intervention_analysis_enhanced", mode = "function") || 
+          exists("intervention_analysis", mode = "function")) {
+        
+        if (input$intervention_type == "discrete" && exists("intervention_analysis_enhanced", mode = "function")) {
+          interventions <- intervention_analysis_enhanced(
+            values$sensitivity_results,
+            target_lambda_change = input$target_lambda_change,
+            intervention_type = "discrete"
+          )
+        } else if (exists("intervention_analysis", mode = "function")) {
+          interventions <- intervention_analysis(
+            values$sensitivity_results,
+            target_lambda_change = input$target_lambda_change
+          )
+        } else {
+          stop("Intervention analysis functions not available")
+        }
+        
+        values$intervention_results <- interventions
+        values$intervention_computed <- TRUE
+        
+        showNotification("✅ Intervention analysis completed!", type = "message")
       } else {
-        interventions <- intervention_analysis(
-          values$sensitivity_results,
-          target_lambda_change = input$target_lambda_change
-        )
+        showNotification("❌ Intervention analysis functions not available", type = "error")
       }
-      
-      values$intervention_results <- interventions
-      values$intervention_computed <- TRUE
-      
-      showNotification("✅ Intervention analysis completed!", type = "message")
       
     }, error = function(e) {
       showNotification(paste("❌ Error in intervention analysis:", e$message), type = "error")
@@ -785,49 +914,282 @@ server <- function(input, output, session) {
     )
   })
   
-  # Spectral analysis outputs
-  output$spectral_results <- renderText({
+  # ENHANCED Spectral analysis outputs
+  output$spectral_metrics_table <- DT::renderDataTable({
     req(values$spectral_results)
     
-    result_text <- paste(
-      "Dominant Eigenvalue (λmax):", round(values$spectral_results$lambda_max, 6), "\n"
+    # Create comprehensive metrics table
+    metrics_data <- data.frame(
+      Metric = character(),
+      Value = character(),
+      Description = character(),
+      stringsAsFactors = FALSE
     )
     
+    # Add all available metrics from spectral analysis
+    if (!is.null(values$spectral_results$lambda_max)) {
+      metrics_data <- rbind(metrics_data, data.frame(
+        Metric = "Dominant Eigenvalue (λmax)",
+        Value = as.character(round(values$spectral_results$lambda_max, 6)),
+        Description = "Largest eigenvalue of T matrix"
+      ))
+    }
+    
+    if (!is.null(values$spectral_results$lambda_2)) {
+      metrics_data <- rbind(metrics_data, data.frame(
+        Metric = "Second Eigenvalue (λ2)",
+        Value = as.character(round(values$spectral_results$lambda_2, 6)),
+        Description = "Second largest eigenvalue"
+      ))
+    }
+    
+    if (!is.null(values$spectral_results$lambda_min)) {
+      metrics_data <- rbind(metrics_data, data.frame(
+        Metric = "Minimum Eigenvalue (λmin)",
+        Value = as.character(round(values$spectral_results$lambda_min, 6)),
+        Description = "Smallest eigenvalue"
+      ))
+    }
+    
     if (!is.null(values$spectral_results$spectral_radius)) {
-      result_text <- paste(result_text, 
-                           "Spectral Radius:", round(values$spectral_results$spectral_radius, 6), "\n")
+      metrics_data <- rbind(metrics_data, data.frame(
+        Metric = "Spectral Radius",
+        Value = as.character(round(values$spectral_results$spectral_radius, 6)),
+        Description = "Maximum absolute eigenvalue"
+      ))
     }
     
     if (!is.null(values$spectral_results$condition_number)) {
-      result_text <- paste(result_text,
-                           "Condition Number:", round(values$spectral_results$condition_number, 2), "\n")
+      metrics_data <- rbind(metrics_data, data.frame(
+        Metric = "Condition Number",
+        Value = as.character(round(values$spectral_results$condition_number, 2)),
+        Description = "Ratio λmax/λmin"
+      ))
     }
     
-    # Add interpretation
-    lambda_max <- values$spectral_results$lambda_max
-    if (lambda_max > 1) {
-      result_text <- paste(result_text, "\n⚠️  System shows potential for influence amplification (λmax > 1)")
-    } else {
-      result_text <- paste(result_text, "\n✅ System is stable with bounded influence (λmax ≤ 1)")
+    if (!is.null(values$spectral_results$amplification_factor)) {
+      metrics_data <- rbind(metrics_data, data.frame(
+        Metric = "Amplification Factor",
+        Value = as.character(round(values$spectral_results$amplification_factor, 4)),
+        Description = "System amplification potential"
+      ))
     }
     
-    return(result_text)
+    if (!is.null(values$spectral_results$convergence_rate)) {
+      metrics_data <- rbind(metrics_data, data.frame(
+        Metric = "Convergence Rate",
+        Value = as.character(round(values$spectral_results$convergence_rate, 4)),
+        Description = "System convergence speed"
+      ))
+    }
+    
+    if (!is.null(values$spectral_results$concentration_ratio)) {
+      metrics_data <- rbind(metrics_data, data.frame(
+        Metric = "Concentration Ratio",
+        Value = as.character(round(values$spectral_results$concentration_ratio, 4)),
+        Description = "Eigenvalue concentration"
+      ))
+    }
+    
+    if (!is.null(values$spectral_results$eigenvector_sd)) {
+      metrics_data <- rbind(metrics_data, data.frame(
+        Metric = "Eigenvector Std Dev",
+        Value = as.character(round(values$spectral_results$eigenvector_sd, 4)),
+        Description = "Dominant eigenvector variability"
+      ))
+    }
+    
+    if (!is.null(values$spectral_results$eigenvector_range)) {
+      metrics_data <- rbind(metrics_data, data.frame(
+        Metric = "Eigenvector Range",
+        Value = as.character(round(values$spectral_results$eigenvector_range, 4)),
+        Description = "Dominant eigenvector range"
+      ))
+    }
+    
+    # Add diagonalizability information
+    if (!is.null(values$spectral_results$is_diagonalizable)) {
+      metrics_data <- rbind(metrics_data, data.frame(
+        Metric = "Is Diagonalizable",
+        Value = ifelse(values$spectral_results$is_diagonalizable, "Yes", "No"),
+        Description = "Matrix diagonalizability status"
+      ))
+    }
+    
+    DT::datatable(
+      metrics_data,
+      options = list(
+        pageLength = 15,
+        scrollX = TRUE,
+        dom = 'ft'
+      ),
+      rownames = FALSE
+    )
   })
   
-  output$spectral_summary_table <- renderTable({
+  output$primary_metrics_table <- renderTable({
     req(values$spectral_results)
     
-    summary_data <- data.frame(
-      Metric = c("Dominant Eigenvalue", "System Size", "Non-zero Elements"),
-      Value = c(
-        round(values$spectral_results$lambda_max, 4),
-        paste0(values$spectral_results$n, " × ", values$spectral_results$n),
-        sum(values$matrix_A != 0)
-      )
+    primary_data <- data.frame(
+      Metric = character(),
+      Value = character(),
+      stringsAsFactors = FALSE
     )
     
-    return(summary_data)
+    if (!is.null(values$spectral_results$lambda_max)) {
+      primary_data <- rbind(primary_data, data.frame(
+        Metric = "λmax",
+        Value = as.character(round(values$spectral_results$lambda_max, 6))
+      ))
+    }
+    
+    if (!is.null(values$spectral_results$spectral_radius)) {
+      primary_data <- rbind(primary_data, data.frame(
+        Metric = "Spectral Radius",
+        Value = as.character(round(values$spectral_results$spectral_radius, 6))
+      ))
+    }
+    
+    if (!is.null(values$spectral_results$condition_number)) {
+      primary_data <- rbind(primary_data, data.frame(
+        Metric = "Condition Number",
+        Value = as.character(round(values$spectral_results$condition_number, 2))
+      ))
+    }
+    
+    return(primary_data)
   }, striped = TRUE, hover = TRUE, bordered = TRUE)
+  
+  output$system_characteristics_table <- renderTable({
+    req(values$spectral_results)
+    
+    char_data <- data.frame(
+      Property = character(),
+      Value = character(),
+      stringsAsFactors = FALSE
+    )
+    
+    char_data <- rbind(char_data, data.frame(
+      Property = "Matrix Size",
+      Value = paste0(values$spectral_results$n, " × ", values$spectral_results$n)
+    ))
+    
+    if (!is.null(values$spectral_results$is_diagonalizable)) {
+      char_data <- rbind(char_data, data.frame(
+        Property = "Diagonalizable",
+        Value = ifelse(values$spectral_results$is_diagonalizable, "Yes", "No")
+      ))
+    }
+    
+    if (!is.null(values$spectral_results$amplification_factor)) {
+      char_data <- rbind(char_data, data.frame(
+        Property = "Amplification",
+        Value = as.character(round(values$spectral_results$amplification_factor, 4))
+      ))
+    }
+    
+    return(char_data)
+  }, striped = TRUE, hover = TRUE, bordered = TRUE)
+  
+  output$matrix_properties <- renderText({
+    req(values$spectral_results)
+    
+    props_text <- ""
+    
+    if (!is.null(values$spectral_results$case_name)) {
+      props_text <- paste(props_text, "Analysis Case:", values$spectral_results$case_name, "\n")
+    }
+    
+    props_text <- paste(props_text, "Factor Names:", paste(values$factor_names, collapse = ", "), "\n")
+    
+    # Add matrix statistics
+    if (!is.null(values$spectral_results$A_matrix)) {
+      props_text <- paste(props_text, 
+                          "Original Matrix (A) range: [", 
+                          round(min(values$spectral_results$A_matrix), 2), ", ",
+                          round(max(values$spectral_results$A_matrix), 2), "]\n")
+    }
+    
+    if (!is.null(values$spectral_results$T_matrix)) {
+      props_text <- paste(props_text, 
+                          "Total Relations Matrix (T) range: [", 
+                          round(min(values$spectral_results$T_matrix), 2), ", ",
+                          round(max(values$spectral_results$T_matrix), 2), "]\n")
+    }
+    
+    return(props_text)
+  })
+  
+  output$eigenvalue_details <- renderText({
+    req(values$spectral_results)
+    
+    details_text <- ""
+    
+    if (!is.null(values$spectral_results$lambda_max)) {
+      details_text <- paste(details_text, "Dominant eigenvalue (λmax):", 
+                            round(values$spectral_results$lambda_max, 6), "\n")
+    }
+    
+    if (!is.null(values$spectral_results$lambda_2)) {
+      details_text <- paste(details_text, "Second largest eigenvalue (λ2):", 
+                            round(values$spectral_results$lambda_2, 6), "\n")
+      
+      if (!is.null(values$spectral_results$lambda_max)) {
+        gap <- values$spectral_results$lambda_max - values$spectral_results$lambda_2
+        details_text <- paste(details_text, "Eigenvalue gap (λmax - λ2):", 
+                              round(gap, 6), "\n")
+      }
+    }
+    
+    if (!is.null(values$spectral_results$lambda_min)) {
+      details_text <- paste(details_text, "Smallest eigenvalue (λmin):", 
+                            round(values$spectral_results$lambda_min, 6), "\n")
+    }
+    
+    if (!is.null(values$spectral_results$all_eigenvalues)) {
+      details_text <- paste(details_text, "\nAll eigenvalues (real parts):\n")
+      eigenvals <- round(values$spectral_results$all_eigenvalues, 4)
+      details_text <- paste(details_text, paste(eigenvals, collapse = ", "), "\n")
+    }
+    
+    return(details_text)
+  })
+  
+  output$system_dynamics <- renderText({
+    req(values$spectral_results)
+    
+    dynamics_text <- ""
+    
+    if (!is.null(values$spectral_results$convergence_rate)) {
+      dynamics_text <- paste(dynamics_text, "Convergence rate:", 
+                             round(values$spectral_results$convergence_rate, 6), "\n")
+    }
+    
+    if (!is.null(values$spectral_results$concentration_ratio)) {
+      dynamics_text <- paste(dynamics_text, "Concentration ratio:", 
+                             round(values$spectral_results$concentration_ratio, 4), "\n")
+    }
+    
+    if (!is.null(values$spectral_results$eigenvector_sd)) {
+      dynamics_text <- paste(dynamics_text, "Dominant eigenvector std dev:", 
+                             round(values$spectral_results$eigenvector_sd, 4), "\n")
+    }
+    
+    if (!is.null(values$spectral_results$eigenvector_range)) {
+      dynamics_text <- paste(dynamics_text, "Dominant eigenvector range:", 
+                             round(values$spectral_results$eigenvector_range, 4), "\n")
+    }
+    
+    if (!is.null(values$spectral_results$dominant_eigenvector)) {
+      dynamics_text <- paste(dynamics_text, "\nDominant eigenvector components:\n")
+      eigenvec <- round(values$spectral_results$dominant_eigenvector, 4)
+      for (i in 1:length(eigenvec)) {
+        dynamics_text <- paste(dynamics_text, values$factor_names[i], ":", eigenvec[i], "\n")
+      }
+    }
+    
+    return(dynamics_text)
+  })
   
   # Sensitivity analysis outputs
   output$sensitivity_stats <- renderText({
@@ -838,19 +1200,23 @@ server <- function(input, output, session) {
     }
     
     tryCatch({
-      stats <- get_sensitivity_stats(values$sensitivity_results)
-      
-      paste(
-        "Computation Method:", values$sensitivity_results$computation_method, "\n",
-        "Mean Sensitivity:", round(stats$mean, 6), "\n",
-        "Standard Deviation:", round(stats$sd, 6), "\n",
-        "Range: [", round(stats$min, 6), ",", round(stats$max, 6), "]\n",
-        "Mean Absolute Sensitivity:", round(stats$mean_abs, 6), "\n",
-        "Total Relationships:", stats$total_elements, "\n",
-        "Amplifying (positive):", stats$n_positive, "(", round(100*stats$n_positive/stats$total_elements, 1), "%)\n",
-        "Dampening (negative):", stats$n_negative, "(", round(100*stats$n_negative/stats$total_elements, 1), "%)\n",
-        "Near-zero:", stats$n_zero, "(", round(100*stats$n_zero/stats$total_elements, 1), "%)"
-      )
+      if (exists("get_sensitivity_stats", mode = "function")) {
+        stats <- get_sensitivity_stats(values$sensitivity_results)
+        
+        paste(
+          "Computation Method:", values$sensitivity_results$computation_method %||% "Unknown", "\n",
+          "Mean Sensitivity:", round(stats$mean, 6), "\n",
+          "Standard Deviation:", round(stats$sd, 6), "\n",
+          "Range: [", round(stats$min, 6), ",", round(stats$max, 6), "]\n",
+          "Mean Absolute Sensitivity:", round(stats$mean_abs, 6), "\n",
+          "Total Relationships:", stats$total_elements, "\n",
+          "Amplifying (positive):", stats$n_positive, "(", round(100*stats$n_positive/stats$total_elements, 1), "%)\n",
+          "Dampening (negative):", stats$n_negative, "(", round(100*stats$n_negative/stats$total_elements, 1), "%)\n",
+          "Near-zero:", stats$n_zero, "(", round(100*stats$n_zero/stats$total_elements, 1), "%)"
+        )
+      } else {
+        return("Sensitivity statistics function not available")
+      }
     }, error = function(e) {
       paste("ERROR computing sensitivity statistics:", e$message)
     })
@@ -866,30 +1232,36 @@ server <- function(input, output, session) {
                  theme_void())
       }
       
-      stats <- get_sensitivity_stats(values$sensitivity_results)
-      
-      classification_data <- data.frame(
-        Type = c("Amplifying", "Dampening", "Near-zero"),
-        Count = c(stats$n_positive, stats$n_negative, stats$n_zero),
-        Percentage = c(
-          round(100*stats$n_positive/stats$total_elements, 1),
-          round(100*stats$n_negative/stats$total_elements, 1),
-          round(100*stats$n_zero/stats$total_elements, 1)
+      if (exists("get_sensitivity_stats", mode = "function")) {
+        stats <- get_sensitivity_stats(values$sensitivity_results)
+        
+        classification_data <- data.frame(
+          Type = c("Amplifying", "Dampening", "Near-zero"),
+          Count = c(stats$n_positive, stats$n_negative, stats$n_zero),
+          Percentage = c(
+            round(100*stats$n_positive/stats$total_elements, 1),
+            round(100*stats$n_negative/stats$total_elements, 1),
+            round(100*stats$n_zero/stats$total_elements, 1)
+          )
         )
-      )
-      
-      ggplot(classification_data, aes(x = Type, y = Count, fill = Type)) +
-        geom_col(alpha = 0.8) +
-        geom_text(aes(label = paste0(Count, "\n(", Percentage, "%)")), 
-                  vjust = -0.5, fontface = "bold") +
-        scale_fill_manual(values = c("Amplifying" = "#E31A1C", "Dampening" = "#1F78B4", "Near-zero" = "#33A02C")) +
-        theme_minimal() +
-        theme(legend.position = "none",
-              axis.title.x = element_blank(),
-              plot.title = element_text(size = 14, face = "bold")) +
-        labs(title = "Relationship Type Distribution",
-             y = "Number of Relationships") +
-        ylim(0, max(classification_data$Count) * 1.2)
+        
+        ggplot(classification_data, aes(x = Type, y = Count, fill = Type)) +
+          geom_col(alpha = 0.8) +
+          geom_text(aes(label = paste0(Count, "\n(", Percentage, "%)")), 
+                    vjust = -0.5, fontface = "bold") +
+          scale_fill_manual(values = c("Amplifying" = "#E31A1C", "Dampening" = "#1F78B4", "Near-zero" = "#33A02C")) +
+          theme_minimal() +
+          theme(legend.position = "none",
+                axis.title.x = element_blank(),
+                plot.title = element_text(size = 14, face = "bold")) +
+          labs(title = "Relationship Type Distribution",
+               y = "Number of Relationships") +
+          ylim(0, max(classification_data$Count) * 1.2)
+      } else {
+        ggplot() + 
+          annotate("text", x = 0.5, y = 0.5, label = "Sensitivity statistics function not available", size = 6) +
+          theme_void()
+      }
     }, error = function(e) {
       ggplot() + 
         annotate("text", x = 0.5, y = 0.5, label = paste("Plot error:", e$message), size = 6) +
@@ -897,7 +1269,7 @@ server <- function(input, output, session) {
     })
   })
   
-  # Visualization outputs
+  # Visualization outputs - with safe function checks
   output$sensitivity_heatmap <- renderPlot({
     req(values$sensitivity_results)
     
@@ -965,7 +1337,13 @@ server <- function(input, output, session) {
     req(values$sensitivity_results)
     
     tryCatch({
-      create_dematel_interrelationship_map(values$sensitivity_results)
+      if (exists("create_dematel_interrelationship_map", mode = "function")) {
+        create_dematel_interrelationship_map(values$sensitivity_results)
+      } else {
+        ggplot() +
+          annotate("text", x = 0.5, y = 0.5, label = "Interrelationship map function not available", size = 6) +
+          theme_void()
+      }
     }, error = function(e) {
       ggplot() +
         annotate("text", x = 0.5, y = 0.5, 
@@ -1026,37 +1404,43 @@ server <- function(input, output, session) {
                  theme_void())
       }
       
-      critical_rels <- identify_critical_relationships(values$sensitivity_results, 
-                                                       threshold_percentile = input$critical_threshold)
-      
-      if (nrow(critical_rels) > 0) {
-        top_10 <- head(critical_rels, 10)
-        top_10$relationship <- paste0(top_10$from_factor, " → ", top_10$to_factor)
-        top_10$relationship <- factor(top_10$relationship, levels = rev(top_10$relationship))
+      if (exists("identify_critical_relationships", mode = "function")) {
+        critical_rels <- identify_critical_relationships(values$sensitivity_results, 
+                                                         threshold_percentile = input$critical_threshold)
         
-        ggplot(top_10, aes(x = relationship, y = sensitivity, fill = interpretation)) +
-          geom_col(alpha = 0.8) +
-          coord_flip() +
-          scale_fill_manual(
-            values = c("Amplifying" = "#E31A1C", "Dampening" = "#1F78B4"),
-            name = "Effect Type"
-          ) +
-          theme_minimal() +
-          theme(plot.title = element_text(size = 14, face = "bold")) +
-          labs(
-            title = paste("Top 10 Most Critical Relationships"),
-            subtitle = paste(input$critical_threshold, "th percentile threshold"),
-            x = "Relationship",
-            y = "Sensitivity Value"
-          ) +
-          geom_hline(yintercept = 0, color = "black", linetype = "solid", alpha = 0.3)
+        if (nrow(critical_rels) > 0) {
+          top_10 <- head(critical_rels, 10)
+          top_10$relationship <- paste0(top_10$from_factor, " → ", top_10$to_factor)
+          top_10$relationship <- factor(top_10$relationship, levels = rev(top_10$relationship))
+          
+          ggplot(top_10, aes(x = relationship, y = sensitivity, fill = interpretation)) +
+            geom_col(alpha = 0.8) +
+            coord_flip() +
+            scale_fill_manual(
+              values = c("Amplifying" = "#E31A1C", "Dampening" = "#1F78B4"),
+              name = "Effect Type"
+            ) +
+            theme_minimal() +
+            theme(plot.title = element_text(size = 14, face = "bold")) +
+            labs(
+              title = paste("Top 10 Most Critical Relationships"),
+              subtitle = paste(input$critical_threshold, "th percentile threshold"),
+              x = "Relationship",
+              y = "Sensitivity Value"
+            ) +
+            geom_hline(yintercept = 0, color = "black", linetype = "solid", alpha = 0.3)
+        } else {
+          ggplot() +
+            annotate("text", x = 0.5, y = 0.5, 
+                     label = "No critical relationships\nfound at this threshold",
+                     size = 6, hjust = 0.5, vjust = 0.5) +
+            theme_void() +
+            labs(title = "Top Critical Relationships")
+        }
       } else {
         ggplot() +
-          annotate("text", x = 0.5, y = 0.5, 
-                   label = "No critical relationships\nfound at this threshold",
-                   size = 6, hjust = 0.5, vjust = 0.5) +
-          theme_void() +
-          labs(title = "Top Critical Relationships")
+          annotate("text", x = 0.5, y = 0.5, label = "Critical relationships function not available", size = 6) +
+          theme_void()
       }
     }, error = function(e) {
       ggplot() +
@@ -1077,33 +1461,37 @@ server <- function(input, output, session) {
         return(DT::datatable(data.frame(Error = "Sensitivity matrix is NULL")))
       }
       
-      critical_rels <- identify_critical_relationships(values$sensitivity_results, 
-                                                       threshold_percentile = input$critical_threshold)
-      
-      if (nrow(critical_rels) > 0) {
-        display_data <- critical_rels[, c("from_factor", "to_factor", "sensitivity", 
-                                          "abs_sensitivity", "interpretation")]
-        names(display_data) <- c("From Factor", "To Factor", "Sensitivity", 
-                                 "Abs. Sensitivity", "Effect Type")
+      if (exists("identify_critical_relationships", mode = "function")) {
+        critical_rels <- identify_critical_relationships(values$sensitivity_results, 
+                                                         threshold_percentile = input$critical_threshold)
         
-        DT::datatable(
-          display_data,
-          options = list(
-            pageLength = 15,
-            scrollX = TRUE,
-            order = list(list(3, "desc"))
-          )
-        ) %>%
-          DT::formatRound(columns = c("Sensitivity", "Abs. Sensitivity"), digits = 6) %>%
-          DT::formatStyle(
-            "Effect Type",
-            backgroundColor = DT::styleEqual(
-              c("Amplifying", "Dampening"),
-              c("#ffebee", "#e3f2fd")
+        if (nrow(critical_rels) > 0) {
+          display_data <- critical_rels[, c("from_factor", "to_factor", "sensitivity", 
+                                            "abs_sensitivity", "interpretation")]
+          names(display_data) <- c("From Factor", "To Factor", "Sensitivity", 
+                                   "Abs. Sensitivity", "Effect Type")
+          
+          DT::datatable(
+            display_data,
+            options = list(
+              pageLength = 15,
+              scrollX = TRUE,
+              order = list(list(3, "desc"))
             )
-          )
+          ) %>%
+            DT::formatRound(columns = c("Sensitivity", "Abs. Sensitivity"), digits = 6) %>%
+            DT::formatStyle(
+              "Effect Type",
+              backgroundColor = DT::styleEqual(
+                c("Amplifying", "Dampening"),
+                c("#ffebee", "#e3f2fd")
+              )
+            )
+        } else {
+          DT::datatable(data.frame(Message = "No critical relationships found at this threshold"))
+        }
       } else {
-        DT::datatable(data.frame(Message = "No critical relationships found at this threshold"))
+        DT::datatable(data.frame(Error = "Critical relationships function not available"))
       }
     }, error = function(e) {
       DT::datatable(data.frame(Error = paste("Error generating table:", e$message)))
@@ -1157,45 +1545,49 @@ server <- function(input, output, session) {
     req(values$sensitivity_results)
     
     tryCatch({
-      stats <- get_sensitivity_stats(values$sensitivity_results)
-      critical_90 <- identify_critical_relationships(values$sensitivity_results, 90)
-      critical_95 <- identify_critical_relationships(values$sensitivity_results, 95)
-      
-      summary_text <- paste(
-        "EXECUTIVE SUMMARY\n",
-        "================\n\n",
-        "System Overview:\n",
-        "- Matrix size:", values$spectral_results$n, "×", values$spectral_results$n, "\n",
-        "- Dominant eigenvalue (λmax):", round(values$spectral_results$lambda_max, 6), "\n",
-        "- System stability:", ifelse(values$spectral_results$lambda_max > 1, 
-                                      "Potentially amplifying", "Stable"), "\n\n",
+      if (exists("get_sensitivity_stats", mode = "function") && 
+          exists("identify_critical_relationships", mode = "function")) {
         
-        "Sensitivity Analysis:\n",
-        "- Total relationships analyzed:", stats$total_elements, "\n",
-        "- Amplifying relationships:", stats$n_positive, 
-        " (", round(100*stats$n_positive/stats$total_elements, 1), "%)\n",
-        "- Dampening relationships:", stats$n_negative, 
-        " (", round(100*stats$n_negative/stats$total_elements, 1), "%)\n",
-        "- Mean absolute sensitivity:", round(stats$mean_abs, 6), "\n\n",
+        stats <- get_sensitivity_stats(values$sensitivity_results)
+        critical_90 <- identify_critical_relationships(values$sensitivity_results, 90)
+        critical_95 <- identify_critical_relationships(values$sensitivity_results, 95)
         
-        "Critical Relationships:\n",
-        "- 90th percentile threshold:", nrow(critical_90), "relationships\n",
-        "- 95th percentile threshold:", nrow(critical_95), "relationships\n"
-      )
-      
-      if (nrow(critical_95) > 0) {
-        top_critical <- head(critical_95, 3)
-        summary_text <- paste(summary_text, "\nTop 3 Most Critical:\n")
-        for (i in 1:nrow(top_critical)) {
-          summary_text <- paste(summary_text, 
-                                paste0(i, ". ", top_critical$from_factor[i], " → ", 
-                                       top_critical$to_factor[i], ": ", 
-                                       round(top_critical$sensitivity[i], 6), 
-                                       " (", top_critical$interpretation[i], ")\n"))
+        summary_text <- paste(
+          "EXECUTIVE SUMMARY\n",
+          "================\n\n",
+          "System Overview:\n",
+          "- Matrix size:", values$spectral_results$n, "×", values$spectral_results$n, "\n",
+          "- Dominant eigenvalue (λmax):", round(values$spectral_results$lambda_max, 6), "\n\n",
+          
+          "Sensitivity Analysis:\n",
+          "- Total relationships analyzed:", stats$total_elements, "\n",
+          "- Amplifying relationships:", stats$n_positive, 
+          " (", round(100*stats$n_positive/stats$total_elements, 1), "%)\n",
+          "- Dampening relationships:", stats$n_negative, 
+          " (", round(100*stats$n_negative/stats$total_elements, 1), "%)\n",
+          "- Mean absolute sensitivity:", round(stats$mean_abs, 6), "\n\n",
+          
+          "Critical Relationships:\n",
+          "- 90th percentile threshold:", nrow(critical_90), "relationships\n",
+          "- 95th percentile threshold:", nrow(critical_95), "relationships\n"
+        )
+        
+        if (nrow(critical_95) > 0) {
+          top_critical <- head(critical_95, 3)
+          summary_text <- paste(summary_text, "\nTop 3 Most Critical:\n")
+          for (i in 1:nrow(top_critical)) {
+            summary_text <- paste(summary_text, 
+                                  paste0(i, ". ", top_critical$from_factor[i], " → ", 
+                                         top_critical$to_factor[i], ": ", 
+                                         round(top_critical$sensitivity[i], 6), 
+                                         " (", top_critical$interpretation[i], ")\n"))
+          }
         }
+        
+        return(summary_text)
+      } else {
+        return("Executive summary functions not available")
       }
-      
-      return(summary_text)
       
     }, error = function(e) {
       paste("Error generating executive summary:", e$message)
@@ -1205,21 +1597,50 @@ server <- function(input, output, session) {
   # Download handlers
   output$download_spectral <- downloadHandler(
     filename = function() {
-      paste0("spectral_analysis_", Sys.Date(), ".csv")
+      paste0("complete_spectral_analysis_", Sys.Date(), ".csv")
     },
     content = function(file) {
       if (!is.null(values$spectral_results)) {
-        # Create a summary data frame
-        summary_df <- data.frame(
-          Metric = c("Dominant_Eigenvalue", "Spectral_Radius", "Condition_Number", "System_Size"),
-          Value = c(
-            values$spectral_results$lambda_max,
-            values$spectral_results$spectral_radius %||% NA,
-            values$spectral_results$condition_number %||% NA,
-            values$spectral_results$n
-          )
+        # Create comprehensive spectral analysis data frame
+        spectral_df <- data.frame(
+          Metric = character(),
+          Value = numeric(),
+          stringsAsFactors = FALSE
         )
-        write.csv(summary_df, file, row.names = FALSE)
+        
+        # Add all available metrics
+        if (!is.null(values$spectral_results$lambda_max)) {
+          spectral_df <- rbind(spectral_df, data.frame(Metric = "Dominant_Eigenvalue", Value = values$spectral_results$lambda_max))
+        }
+        if (!is.null(values$spectral_results$lambda_2)) {
+          spectral_df <- rbind(spectral_df, data.frame(Metric = "Second_Eigenvalue", Value = values$spectral_results$lambda_2))
+        }
+        if (!is.null(values$spectral_results$lambda_min)) {
+          spectral_df <- rbind(spectral_df, data.frame(Metric = "Minimum_Eigenvalue", Value = values$spectral_results$lambda_min))
+        }
+        if (!is.null(values$spectral_results$spectral_radius)) {
+          spectral_df <- rbind(spectral_df, data.frame(Metric = "Spectral_Radius", Value = values$spectral_results$spectral_radius))
+        }
+        if (!is.null(values$spectral_results$condition_number)) {
+          spectral_df <- rbind(spectral_df, data.frame(Metric = "Condition_Number", Value = values$spectral_results$condition_number))
+        }
+        if (!is.null(values$spectral_results$amplification_factor)) {
+          spectral_df <- rbind(spectral_df, data.frame(Metric = "Amplification_Factor", Value = values$spectral_results$amplification_factor))
+        }
+        if (!is.null(values$spectral_results$convergence_rate)) {
+          spectral_df <- rbind(spectral_df, data.frame(Metric = "Convergence_Rate", Value = values$spectral_results$convergence_rate))
+        }
+        if (!is.null(values$spectral_results$concentration_ratio)) {
+          spectral_df <- rbind(spectral_df, data.frame(Metric = "Concentration_Ratio", Value = values$spectral_results$concentration_ratio))
+        }
+        if (!is.null(values$spectral_results$eigenvector_sd)) {
+          spectral_df <- rbind(spectral_df, data.frame(Metric = "Eigenvector_Std_Dev", Value = values$spectral_results$eigenvector_sd))
+        }
+        if (!is.null(values$spectral_results$eigenvector_range)) {
+          spectral_df <- rbind(spectral_df, data.frame(Metric = "Eigenvector_Range", Value = values$spectral_results$eigenvector_range))
+        }
+        
+        write.csv(spectral_df, file, row.names = FALSE)
       }
     }
   )
@@ -1229,7 +1650,7 @@ server <- function(input, output, session) {
       paste0("critical_relationships_", Sys.Date(), ".csv")
     },
     content = function(file) {
-      if (!is.null(values$sensitivity_results)) {
+      if (!is.null(values$sensitivity_results) && exists("identify_critical_relationships", mode = "function")) {
         critical_rels <- identify_critical_relationships(values$sensitivity_results, 
                                                          threshold_percentile = input$critical_threshold)
         write.csv(critical_rels, file, row.names = FALSE)
@@ -1248,6 +1669,91 @@ server <- function(input, output, session) {
     }
   )
   
+  output$download_full_report <- downloadHandler(
+    filename = function() {
+      paste0("dematel_full_report_", Sys.Date(), ".txt")
+    },
+    content = function(file) {
+      if (!is.null(values$sensitivity_results)) {
+        report_content <- ""
+        
+        # Add executive summary
+        if (exists("get_sensitivity_stats", mode = "function") && 
+            exists("identify_critical_relationships", mode = "function")) {
+          
+          stats <- get_sensitivity_stats(values$sensitivity_results)
+          critical_90 <- identify_critical_relationships(values$sensitivity_results, 90)
+          
+          report_content <- paste(
+            "DEMATEL COMPREHENSIVE ANALYSIS REPORT\n",
+            "=====================================\n\n",
+            "Generated on:", Sys.time(), "\n\n",
+            "SYSTEM OVERVIEW:\n",
+            "Matrix size:", values$spectral_results$n, "×", values$spectral_results$n, "\n",
+            "Factors:", paste(values$factor_names, collapse = ", "), "\n",
+            "Dominant eigenvalue (λmax):", round(values$spectral_results$lambda_max, 6), "\n\n",
+            
+            "SENSITIVITY ANALYSIS RESULTS:\n",
+            "Method:", values$sensitivity_results$computation_method %||% "Unknown", "\n",
+            "Total relationships:", stats$total_elements, "\n",
+            "Mean absolute sensitivity:", round(stats$mean_abs, 6), "\n",
+            "Amplifying relationships:", stats$n_positive, "\n",
+            "Dampening relationships:", stats$n_negative, "\n",
+            "Critical relationships (90th percentile):", nrow(critical_90), "\n\n"
+          )
+        }
+        
+        writeLines(report_content, file)
+      }
+    }
+  )
+  
+  output$download_summary_report <- downloadHandler(
+    filename = function() {
+      paste0("dematel_summary_", Sys.Date(), ".csv")
+    },
+    content = function(file) {
+      if (!is.null(values$sensitivity_results) && exists("get_sensitivity_stats", mode = "function")) {
+        stats <- get_sensitivity_stats(values$sensitivity_results)
+        
+        summary_df <- data.frame(
+          Analysis_Date = Sys.Date(),
+          Matrix_Size = paste0(values$spectral_results$n, "x", values$spectral_results$n),
+          Lambda_Max = values$spectral_results$lambda_max,
+          Mean_Sensitivity = stats$mean,
+          Mean_Abs_Sensitivity = stats$mean_abs,
+          Amplifying_Count = stats$n_positive,
+          Dampening_Count = stats$n_negative,
+          Method = values$sensitivity_results$computation_method %||% "Unknown"
+        )
+        
+        write.csv(summary_df, file, row.names = FALSE)
+      }
+    }
+  )
+  
+  output$download_spectral_data <- downloadHandler(
+    filename = function() {
+      paste0("spectral_matrices_", Sys.Date(), ".csv")
+    },
+    content = function(file) {
+      if (!is.null(values$spectral_results$T_matrix)) {
+        write.csv(values$spectral_results$T_matrix, file, row.names = TRUE)
+      }
+    }
+  )
+  
+  output$download_sensitivity_data <- downloadHandler(
+    filename = function() {
+      paste0("sensitivity_matrix_", Sys.Date(), ".csv")
+    },
+    content = function(file) {
+      if (!is.null(values$sensitivity_results$sensitivity_matrix)) {
+        write.csv(values$sensitivity_results$sensitivity_matrix, file, row.names = TRUE)
+      }
+    }
+  )
+  
   # Helper function for null coalescing
   `%||%` <- function(x, y) {
     if (is.null(x)) y else x
@@ -1255,4 +1761,5 @@ server <- function(input, output, session) {
 }
 
 # Run the application
+cat("Starting complete DEMATEL Sensitivity Analysis app...\n")
 shinyApp(ui = ui, server = server)

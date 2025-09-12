@@ -431,28 +431,38 @@ compute_sensitivity_analytical.DEMATEL_Sensitivity <- function(obj) {
       stop("Scaling factor is zero")
     }
     
-    # Precompute (I + T)^2 for efficiency
+    
+    # NEW: use sandwich formula
     I <- diag(n)
-    I_plus_T_squared <- (I + obj$T) %*% (I + obj$T)
+    S <- I + T
     
-    # Compute alpha values
-    alpha <- numeric(n)
-    for (i in 1:n) {
-      alpha[i] <- as.numeric(t(v) %*% I_plus_T_squared[, i])
-    }
+    left  <- as.numeric(t(v) %*% S)   # length-n row vector
+    right <- as.numeric(S %*% u)      # length-n column vector
     
-    cat("Applying Theorem 1 formula...\n")
-    pb <- txtProgressBar(min = 0, max = n^2, style = 3)
+    sensitivity_matrix <- (1/s) * outer(left, right)  # outer product: sens[i,j] = left[i] * right[j]
     
-    # Compute sensitivity matrix
-    sensitivity_matrix <- matrix(0, nrow = n, ncol = n)
-    for (i in 1:n) {
-      for (j in 1:n) {
-        sensitivity_matrix[i, j] <- (1/s) * alpha[i] * u[j]
-        setTxtProgressBar(pb, (i-1)*n + j)
-      }
-    }
-    close(pb)
+    # # Precompute (I + T)^2 for efficiency
+    # I <- diag(n)
+    # I_plus_T_squared <- (I + obj$T) %*% (I + obj$T)
+    # 
+    # # Compute alpha values
+    # alpha <- numeric(n)
+    # for (i in 1:n) {
+    #   alpha[i] <- as.numeric(t(v) %*% I_plus_T_squared[, i])
+    # }
+    # 
+    # cat("Applying Theorem 1 formula...\n")
+    # pb <- txtProgressBar(min = 0, max = n^2, style = 3)
+    # 
+    # # Compute sensitivity matrix
+    # sensitivity_matrix <- matrix(0, nrow = n, ncol = n)
+    # for (i in 1:n) {
+    #   for (j in 1:n) {
+    #     sensitivity_matrix[i, j] <- (1/s) * alpha[i] * u[j]
+    #     setTxtProgressBar(pb, (i-1)*n + j)
+    #   }
+    # }
+    # close(pb)
     
     # Final verification: sensitivity matrix should not be all zeros
     sens_range <- range(sensitivity_matrix)

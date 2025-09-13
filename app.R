@@ -711,9 +711,20 @@ server <- function(input, output, session) {
     
     tryCatch({
       if (input$input_method == "example") {
-        # Load example data
-        example_text <- "0,3,3,1,3\n0,0,2,0,1\n0,0,0,2,0\n3,1,2,0,3\n4,1,2,1,0"
-        A <- as.matrix(read.csv(textConnection(example_text), header = FALSE))
+        # Create example matrix
+        set.seed(42)
+        n <- 5
+        A <- matrix(0, nrow = n, ncol = n)
+        for (i in 1:n) {
+          for (j in 1:n) {
+            if (i != j) {
+              A[i, j] <- sample(0:4, 1, prob = c(0.2, 0.3, 0.3, 0.15, 0.05))
+            }
+          }
+        }
+        # # Load example data
+        # example_text <- "0,3,3,1,3\n0,0,2,0,1\n0,0,0,2,0\n3,1,2,0,3\n4,1,2,1,0"
+        # A <- as.matrix(read.csv(textConnection(example_text), header = FALSE))
         
         factor_names <- c("Leadership", "Communication", "Innovation", "Risk_Management", "Quality")
         rownames(A) <- colnames(A) <- factor_names

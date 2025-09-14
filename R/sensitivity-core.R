@@ -318,169 +318,87 @@ compute_sensitivity_analytical <- function(obj) {
 compute_sensitivity_analytical.DEMATEL_Sensitivity <- function(obj) {
   n <- obj$n
   
-  # Check assumptions for Theorem 1
+  # Assumption checks (same as before)
   assumption_check <- check_theorem1_assumptions(obj)
   if (!assumption_check$valid) {
-    warning(paste("Theorem 1 assumptions not satisfied:", assumption_check$message,
+    warning(paste("Theorem assumptions not satisfied:", assumption_check$message,
                   "\nFalling back to numerical method."))
     return(compute_sensitivity_numerical(obj))
   }
   
-  cat("Theorem 1 assumptions satisfied. Computing analytical sensitivity...\n")
+  cat("Theorem 2 assumptions satisfied. Computing full analytical sensitivity...\n")
   
   tryCatch({
-    # Get eigendecomposition of T
+    # Eigendecomposition of T
     eigen_result <- eigen(obj$T)
     eigenvalues <- eigen_result$values
     eigenvectors <- eigen_result$vectors
     
-    # Find dominant eigenvalue by real part
     eigenvalues_real <- Re(eigenvalues)
     dominant_idx <- which.max(eigenvalues_real)
-    lambda_max_complex <- eigenvalues[dominant_idx]
-    lambda_max <- Re(lambda_max_complex)
-    
-    # Check if dominant eigenvalue is real
-    if (abs(Im(lambda_max_complex)) > 1e-12) {
-      cat("WARNING: Dominant eigenvalue has imaginary part. Using numerical method.\n")
-      return(compute_sensitivity_numerical(obj))
-    }
+    lambda_max <- Re(eigenvalues[dominant_idx])
     
     # Extract right eigenvector
-    u_complex <- eigenvectors[, dominant_idx]
+    u <- Re(eigenvectors[, dominant_idx])
     
-    # Verify eigenvector is essentially real
-    max_imag_u <- max(abs(Im(u_complex)))
-    
-    if (max_imag_u > 1e-10) {
-      cat("WARNING: Right eigenvector has significant imaginary part. Using numerical method.\n")
-      return(compute_sensitivity_numerical(obj))
-    }
-    
-    u <- Re(u_complex)
-    
-    # For left eigenvector, find the eigenvector of T^T corresponding to the same eigenvalue
+    # Left eigenvector
     eigen_result_T <- eigen(t(obj$T))
-    eigenvalues_T <- eigen_result_T$values
-    eigenvectors_T <- eigen_result_T$vectors
-    
-    eigenvalues_T_real <- Re(eigenvalues_T)
-    
-    # Find closest match to lambda_max
-    diff_from_lambda_max <- abs(eigenvalues_T_real - lambda_max)
-    left_dominant_idx <- which.min(diff_from_lambda_max)
-    
-    if (min(diff_from_lambda_max) > 1e-10) {
-      cat("WARNING: Cannot find matching left eigenvalue. Using numerical method.\n")
-      return(compute_sensitivity_numerical(obj))
-    }
-    
-    v_complex <- eigenvectors_T[, left_dominant_idx]
-    
-    # Verify left eigenvector is essentially real
-    max_imag_v <- max(abs(Im(v_complex)))
-    
-    if (max_imag_v > 1e-10) {
-      cat("WARNING: Left eigenvector has significant imaginary part. Using numerical method.\n")
-      return(compute_sensitivity_numerical(obj))
-    }
-    
-    v <- Re(v_complex)
-    
-    # Ensure proper orientation of eigenvectors
-    inner_product_raw <- as.numeric(t(v) %*% u)
-    
-    if (inner_product_raw < 0) {
-      v <- -v
-      inner_product_raw <- -inner_product_raw
-    }
-    
-    if (abs(inner_product_raw) < 1e-12) {
-      cat("ERROR: Eigenvectors are orthogonal after sign correction\n")
-      return(compute_sensitivity_numerical(obj))
-    }
+    eigenvalues_T_real <- Re(eigen_result_T$values)
+    left_dominant_idx <- which.min(abs(eigenvalues_T_real - lambda_max))
+    v <- Re(eigen_result_T$vectors[, left_dominant_idx])
     
     # Normalize so that v^T u = 1
-    v <- v / inner_product_raw
-    
-    # Verify normalization
-    final_inner_product <- as.numeric(t(v) %*% u)
-    
-    if (abs(final_inner_product - 1) > 1e-10) {
-      cat("WARNING: Normalization verification failed\n")
-      return(compute_sensitivity_numerical(obj))
+    inner_product <- as.numeric(t(v) %*% u)
+    if (inner_product < 0) {
+      v <- -v
+      inner_product <- -inner_product
     }
+    v <- v / inner_product
     
-    # Verify eigenvector equations
-    Tu <- obj$T %*% u
-    lambda_u <- lambda_max * u
-    right_eigen_error <- max(abs(Tu - lambda_u))
+    # Scaling factor s
+    row_sums <- rowSums(obj$A)
+    col_sums <- colSums(obj$A)
+    max_row <- max(row_sums)
+    max_col <- max(col_sums)
+    s <- max(max_row, max_col)
     
-    Tv <- t(obj$T) %*% v
-    lambda_v <- lambda_max * v
-    left_eigen_error <- max(abs(Tv - lambda_v))
+    if (s == 0) stop("Scaling factor is zero")
     
-    if (right_eigen_error > 1e-8 || left_eigen_error > 1e-8) {
-      cat("WARNING: Eigenvector verification failed. Using numerical method.\n")
-      return(compute_sensitivity_numerical(obj))
-    }
-    
-    # Get scaling factor s from normalization
-    s <- max(max(rowSums(obj$A)), max(colSums(obj$A)))
-    if (s == 0) {
-      stop("Scaling factor is zero")
-    }
-    
-    
-    # NEW: use sandwich formula
+    # Local effect (outer product form)
     I <- diag(n)
-    S <- I + T
+    S <- I + obj$T
+    left  <- as.numeric(t(v) %*% S)   # row effect
+    right <- as.numeric(S %*% u)      # column effect
+    local_matrix <- (1/s) * outer(left, right)
     
-    left  <- as.numeric(t(v) %*% S)   # length-n row vector
-    right <- as.numeric(S %*% u)      # length-n column vector
+    # Normalization penalty term
+    C <- as.numeric(t(v) %*% (S %*% obj$A %*% S) %*% u)
     
-    sensitivity_matrix <- (1/s) * outer(left, right)  # outer product: sens[i,j] = left[i] * right[j]
-    
-    # # Precompute (I + T)^2 for efficiency
-    # I <- diag(n)
-    # I_plus_T_squared <- (I + obj$T) %*% (I + obj$T)
-    # 
-    # # Compute alpha values
-    # alpha <- numeric(n)
-    # for (i in 1:n) {
-    #   alpha[i] <- as.numeric(t(v) %*% I_plus_T_squared[, i])
-    # }
-    # 
-    # cat("Applying Theorem 1 formula...\n")
-    # pb <- txtProgressBar(min = 0, max = n^2, style = 3)
-    # 
-    # # Compute sensitivity matrix
-    # sensitivity_matrix <- matrix(0, nrow = n, ncol = n)
-    # for (i in 1:n) {
-    #   for (j in 1:n) {
-    #     sensitivity_matrix[i, j] <- (1/s) * alpha[i] * u[j]
-    #     setTxtProgressBar(pb, (i-1)*n + j)
-    #   }
-    # }
-    # close(pb)
-    
-    # Final verification: sensitivity matrix should not be all zeros
-    sens_range <- range(sensitivity_matrix)
-    
-    if (diff(sens_range) < 1e-15) {
-      cat("WARNING: Sensitivity matrix is essentially zero. Using numerical method.\n")
-      return(compute_sensitivity_numerical(obj))
+    # δ_ij mask: 1 if in critical row or column, 0 otherwise
+    delta <- matrix(0, n, n)
+    if (s == max_row) {
+      critical_rows <- which(row_sums == max_row)
+      delta[critical_rows, ] <- 1
     }
+    if (s == max_col) {
+      critical_cols <- which(col_sums == max_col)
+      delta[, critical_cols] <- 1
+    }
+    
+    normalization_matrix <- -(C / s^2) * delta
+    
+    # Full sensitivity = local effect + normalization effect
+    sensitivity_matrix <- local_matrix + normalization_matrix
     
     # Add row and column names
     rownames(sensitivity_matrix) <- obj$factor_names
     colnames(sensitivity_matrix) <- obj$factor_names
     
     obj$sensitivity_matrix <- sensitivity_matrix
-    obj$computation_method <- "analytical_theorem1"
+    obj$computation_method <- "analytical_theorem2"
     obj$assumptions_check <- assumption_check
     
-    cat("\nAnalytical sensitivity computation completed successfully.\n")
+    cat("\nAnalytical sensitivity computation completed successfully (Theorem 2).\n")
     cat("Sensitivity range:", range(as.vector(sensitivity_matrix)), "\n")
     
     return(obj)
@@ -491,3 +409,158 @@ compute_sensitivity_analytical.DEMATEL_Sensitivity <- function(obj) {
     return(compute_sensitivity_numerical(obj))
   })
 }
+
+# compute_sensitivity_analytical.DEMATEL_Sensitivity <- function(obj) {
+#   n <- obj$n
+#   
+#   # Check assumptions for Theorem 1
+#   assumption_check <- check_theorem1_assumptions(obj)
+#   if (!assumption_check$valid) {
+#     warning(paste("Theorem 1 assumptions not satisfied:", assumption_check$message,
+#                   "\nFalling back to numerical method."))
+#     return(compute_sensitivity_numerical(obj))
+#   }
+#   
+#   cat("Theorem 1 assumptions satisfied. Computing analytical sensitivity...\n")
+#   
+#   tryCatch({
+#     # Get eigendecomposition of T
+#     eigen_result <- eigen(obj$T)
+#     eigenvalues <- eigen_result$values
+#     eigenvectors <- eigen_result$vectors
+#     
+#     # Find dominant eigenvalue by real part
+#     eigenvalues_real <- Re(eigenvalues)
+#     dominant_idx <- which.max(eigenvalues_real)
+#     lambda_max_complex <- eigenvalues[dominant_idx]
+#     lambda_max <- Re(lambda_max_complex)
+#     
+#     # Check if dominant eigenvalue is real
+#     if (abs(Im(lambda_max_complex)) > 1e-12) {
+#       cat("WARNING: Dominant eigenvalue has imaginary part. Using numerical method.\n")
+#       return(compute_sensitivity_numerical(obj))
+#     }
+#     
+#     # Extract right eigenvector
+#     u_complex <- eigenvectors[, dominant_idx]
+#     
+#     # Verify eigenvector is essentially real
+#     max_imag_u <- max(abs(Im(u_complex)))
+#     
+#     if (max_imag_u > 1e-10) {
+#       cat("WARNING: Right eigenvector has significant imaginary part. Using numerical method.\n")
+#       return(compute_sensitivity_numerical(obj))
+#     }
+#     
+#     u <- Re(u_complex)
+#     
+#     # For left eigenvector, find the eigenvector of T^T corresponding to the same eigenvalue
+#     eigen_result_T <- eigen(t(obj$T))
+#     eigenvalues_T <- eigen_result_T$values
+#     eigenvectors_T <- eigen_result_T$vectors
+#     
+#     eigenvalues_T_real <- Re(eigenvalues_T)
+#     
+#     # Find closest match to lambda_max
+#     diff_from_lambda_max <- abs(eigenvalues_T_real - lambda_max)
+#     left_dominant_idx <- which.min(diff_from_lambda_max)
+#     
+#     if (min(diff_from_lambda_max) > 1e-10) {
+#       cat("WARNING: Cannot find matching left eigenvalue. Using numerical method.\n")
+#       return(compute_sensitivity_numerical(obj))
+#     }
+#     
+#     v_complex <- eigenvectors_T[, left_dominant_idx]
+#     
+#     # Verify left eigenvector is essentially real
+#     max_imag_v <- max(abs(Im(v_complex)))
+#     
+#     if (max_imag_v > 1e-10) {
+#       cat("WARNING: Left eigenvector has significant imaginary part. Using numerical method.\n")
+#       return(compute_sensitivity_numerical(obj))
+#     }
+#     
+#     v <- Re(v_complex)
+#     
+#     # Ensure proper orientation of eigenvectors
+#     inner_product_raw <- as.numeric(t(v) %*% u)
+#     
+#     if (inner_product_raw < 0) {
+#       v <- -v
+#       inner_product_raw <- -inner_product_raw
+#     }
+#     
+#     if (abs(inner_product_raw) < 1e-12) {
+#       cat("ERROR: Eigenvectors are orthogonal after sign correction\n")
+#       return(compute_sensitivity_numerical(obj))
+#     }
+#     
+#     # Normalize so that v^T u = 1
+#     v <- v / inner_product_raw
+#     
+#     # Verify normalization
+#     final_inner_product <- as.numeric(t(v) %*% u)
+#     
+#     if (abs(final_inner_product - 1) > 1e-10) {
+#       cat("WARNING: Normalization verification failed\n")
+#       return(compute_sensitivity_numerical(obj))
+#     }
+#     
+#     # Verify eigenvector equations
+#     Tu <- obj$T %*% u
+#     lambda_u <- lambda_max * u
+#     right_eigen_error <- max(abs(Tu - lambda_u))
+#     
+#     Tv <- t(obj$T) %*% v
+#     lambda_v <- lambda_max * v
+#     left_eigen_error <- max(abs(Tv - lambda_v))
+#     
+#     if (right_eigen_error > 1e-8 || left_eigen_error > 1e-8) {
+#       cat("WARNING: Eigenvector verification failed. Using numerical method.\n")
+#       return(compute_sensitivity_numerical(obj))
+#     }
+#     
+#     # Get scaling factor s from normalization
+#     s <- max(max(rowSums(obj$A)), max(colSums(obj$A)))
+#     if (s == 0) {
+#       stop("Scaling factor is zero")
+#     }
+#     
+#     
+#     # NEW: use sandwich formula
+#     I <- diag(n)
+#     S <- I + T
+#     
+#     left  <- as.numeric(t(v) %*% S)   # length-n row vector
+#     right <- as.numeric(S %*% u)      # length-n column vector
+#     
+#     sensitivity_matrix <- (1/s) * outer(left, right)  # outer product: sens[i,j] = left[i] * right[j]
+#     
+#    
+#     # Final verification: sensitivity matrix should not be all zeros
+#     sens_range <- range(sensitivity_matrix)
+#     
+#     if (diff(sens_range) < 1e-15) {
+#       cat("WARNING: Sensitivity matrix is essentially zero. Using numerical method.\n")
+#       return(compute_sensitivity_numerical(obj))
+#     }
+#     
+#     # Add row and column names
+#     rownames(sensitivity_matrix) <- obj$factor_names
+#     colnames(sensitivity_matrix) <- obj$factor_names
+#     
+#     obj$sensitivity_matrix <- sensitivity_matrix
+#     obj$computation_method <- "analytical_theorem1"
+#     obj$assumptions_check <- assumption_check
+#     
+#     cat("\nAnalytical sensitivity computation completed successfully.\n")
+#     cat("Sensitivity range:", range(as.vector(sensitivity_matrix)), "\n")
+#     
+#     return(obj)
+#     
+#   }, error = function(e) {
+#     warning(paste("Analytical method failed:", e$message, 
+#                   "\nFalling back to numerical method."))
+#     return(compute_sensitivity_numerical(obj))
+#   })
+# }

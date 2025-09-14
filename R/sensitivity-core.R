@@ -143,59 +143,59 @@ compute_dematel_matrices <- function(A) {
 #' sens_obj <- compute_sensitivity_numerical(sens_obj)
 #'
 #' @export
-compute_sensitivity_numerical <- function(obj, epsilon = 0.01) {
-  UseMethod("compute_sensitivity_numerical")
-}
+# compute_sensitivity_numerical <- function(obj, epsilon = 0.01) {
+#   UseMethod("compute_sensitivity_numerical")
+# }
 
 #' @export
-compute_sensitivity_numerical.DEMATEL_Sensitivity <- function(obj, epsilon = 0.01) {
-  
-  if (epsilon <= 0) {
-    stop("epsilon must be positive")
-  }
-  
-  n <- obj$n
-  sensitivity_matrix <- matrix(0, nrow = n, ncol = n)
-  
-  cat("Computing sensitivity matrix using numerical method...\n")
-  cat("This may take a moment for large matrices.\n")
-  
-  pb <- txtProgressBar(min = 0, max = n^2, style = 3)
-  
-  for (i in 1:n) {
-    for (j in 1:n) {
-      # Create perturbed matrix
-      A_pert <- obj$A
-      A_pert[i, j] <- A_pert[i, j] + epsilon
-      
-      tryCatch({
-        # Compute perturbed system
-        dematel_pert <- compute_dematel_matrices(A_pert)
-        lambda_max_pert <- dematel_pert$lambda_max
-        
-        # Numerical derivative
-        sensitivity_matrix[i, j] <- (lambda_max_pert - obj$lambda_max) / epsilon
-      }, error = function(e) {
-        warning(paste("Could not compute sensitivity for element (", i, ",", j, "): ", e$message))
-        sensitivity_matrix[i, j] <- NA
-      })
-      
-      setTxtProgressBar(pb, (i-1)*n + j)
-    }
-  }
-  close(pb)
-  
-  # Add row and column names
-  rownames(sensitivity_matrix) <- obj$factor_names
-  colnames(sensitivity_matrix) <- obj$factor_names
-  
-  obj$sensitivity_matrix <- sensitivity_matrix
-  obj$computation_method <- "numerical"
-  
-  cat("\nSensitivity matrix computation completed.\n")
-  
-  return(obj)
-}
+# compute_sensitivity_numerical.DEMATEL_Sensitivity <- function(obj, epsilon = 0.01) {
+#   
+#   if (epsilon <= 0) {
+#     stop("epsilon must be positive")
+#   }
+#   
+#   n <- obj$n
+#   sensitivity_matrix <- matrix(0, nrow = n, ncol = n)
+#   
+#   cat("Computing sensitivity matrix using numerical method...\n")
+#   cat("This may take a moment for large matrices.\n")
+#   
+#   pb <- txtProgressBar(min = 0, max = n^2, style = 3)
+#   
+#   for (i in 1:n) {
+#     for (j in 1:n) {
+#       # Create perturbed matrix
+#       A_pert <- obj$A
+#       A_pert[i, j] <- A_pert[i, j] + epsilon
+#       
+#       tryCatch({
+#         # Compute perturbed system
+#         dematel_pert <- compute_dematel_matrices(A_pert)
+#         lambda_max_pert <- dematel_pert$lambda_max
+#         
+#         # Numerical derivative
+#         sensitivity_matrix[i, j] <- (lambda_max_pert - obj$lambda_max) / epsilon
+#       }, error = function(e) {
+#         warning(paste("Could not compute sensitivity for element (", i, ",", j, "): ", e$message))
+#         sensitivity_matrix[i, j] <- NA
+#       })
+#       
+#       setTxtProgressBar(pb, (i-1)*n + j)
+#     }
+#   }
+#   close(pb)
+#   
+#   # Add row and column names
+#   rownames(sensitivity_matrix) <- obj$factor_names
+#   colnames(sensitivity_matrix) <- obj$factor_names
+#   
+#   obj$sensitivity_matrix <- sensitivity_matrix
+#   obj$computation_method <- "numerical"
+#   
+#   cat("\nSensitivity matrix computation completed.\n")
+#   
+#   return(obj)
+# }
 
 #' Check Assumptions for Theorem 1
 #'

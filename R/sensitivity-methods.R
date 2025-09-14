@@ -17,7 +17,7 @@
 #'   \item from_index, to_index: Matrix indices
 #'   \item sensitivity: Raw sensitivity value
 #'   \item abs_sensitivity: Absolute sensitivity value
-#'   \item interpretation: "Amplifying" (positive) or "Dampening" (negative)
+#'   \item interpretation: "Amplifier links" (positive) or "Stabilizer links" (negative)
 #' }
 #'
 #' @examples
@@ -60,7 +60,7 @@ identify_critical_relationships.DEMATEL_Sensitivity <- function(obj, threshold_p
     to_index = critical_indices[, 2],
     sensitivity = obj$sensitivity_matrix[critical_indices],
     abs_sensitivity = abs_sensitivity[critical_indices],
-    interpretation = ifelse(obj$sensitivity_matrix[critical_indices] > 0, "Amplifying", "Dampening"),
+    interpretation = ifelse(obj$sensitivity_matrix[critical_indices] > 0, "Amplifier links", "Stabilizer links"),
     stringsAsFactors = FALSE
   )
 
@@ -475,8 +475,8 @@ print.DEMATEL_Sensitivity <- function(x, ...) {
     cat(sprintf("\nSensitivity Statistics:\n"))
     cat(sprintf("  Range: [%.6f, %.6f]\n", stats$min, stats$max))
     cat(sprintf("  Mean absolute sensitivity: %.6f\n", stats$mean_abs))
-    cat(sprintf("  Amplifying relationships: %d\n", stats$n_positive))
-    cat(sprintf("  Dampening relationships: %d\n", stats$n_negative))
+    cat(sprintf("  Amplifiers relationships: %d\n", stats$n_positive))
+    cat(sprintf("  Stabilizers relationships: %d\n", stats$n_negative))
   } else {
     cat("Sensitivity matrix: Not computed\n")
     cat("Use compute_sensitivity_numerical() or compute_sensitivity_analytical()\n")
@@ -484,36 +484,6 @@ print.DEMATEL_Sensitivity <- function(x, ...) {
   
   invisible(x)
 }
-
-
-#' #' Print Method for DEMATEL_Sensitivity
-#' #'
-#' #' @param x DEMATEL_Sensitivity object
-#' #' @param ... Additional arguments (not used)
-#' #'
-#' #' @export
-#' print.DEMATEL_Sensitivity <- function(x, ...) {
-#'   cat("DEMATEL Sensitivity Analysis Object\n")
-#'   cat("===================================\n")
-#'   cat(sprintf("Number of factors: %d\n", x$n))
-#'   cat(sprintf("Factor names: %s\n", paste(x$factor_names, collapse = ", ")))
-#'   cat(sprintf("Dominant eigenvalue (λmax): %.6f\n", x$lambda_max))
-#' 
-#'   if (!is.null(x$sensitivity_matrix)) {
-#'     cat(sprintf("Sensitivity matrix: Computed (%s method)\n", x$computation_method %||% "unknown"))
-#' 
-#'     stats <- get_sensitivity_stats(x)
-#'     cat(sprintf("  Range: [%.6f, %.6f]\n", stats$min, stats$max))
-#'     cat(sprintf("  Mean absolute sensitivity: %.6f\n", stats$mean_abs))
-#'     cat(sprintf("  Amplifying relationships: %d\n", stats$n_positive))
-#'     cat(sprintf("  Dampening relationships: %d\n", stats$n_negative))
-#'   } else {
-#'     cat("Sensitivity matrix: Not computed\n")
-#'     cat("Use compute_sensitivity_numerical() or compute_sensitivity_analytical()\n")
-#'   }
-#' 
-#'   invisible(x)
-#' }
 
 #' Summary Method for DEMATEL_Sensitivity
 #'
@@ -532,9 +502,9 @@ summary.DEMATEL_Sensitivity <- function(object, ...) {
 
     stats <- get_sensitivity_stats(object)
     cat(sprintf("  Total relationships: %d\n", stats$total_elements))
-    cat(sprintf("  Amplifying (positive): %d (%.1f%%)\n",
+    cat(sprintf("  Amplifier links (positive): %d (%.1f%%)\n",
                 stats$n_positive, 100 * stats$n_positive / stats$total_elements))
-    cat(sprintf("  Dampening (negative): %d (%.1f%%)\n",
+    cat(sprintf("  Stabilizer links (negative): %d (%.1f%%)\n",
                 stats$n_negative, 100 * stats$n_negative / stats$total_elements))
     cat(sprintf("  Near-zero: %d (%.1f%%)\n",
                 stats$n_zero, 100 * stats$n_zero / stats$total_elements))

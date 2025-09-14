@@ -124,7 +124,7 @@ visualize_sensitivity.DEMATEL_Sensitivity <- function(obj, save_plots = FALSE, p
         ggplot2::geom_col(alpha = 0.8) +
         ggplot2::coord_flip() +
         ggplot2::scale_fill_manual(
-          values = c("Amplifying" = "#E31A1C", "Dampening" = "#1F78B4"),
+          values = c("Amplifier links" = "#9EDEC5", "Stabilizer links" = "#C81102"),
           name = "Effect Type"
         ) +
         ggplot2::theme_minimal() +
@@ -280,10 +280,10 @@ create_dematel_interrelationship_map.DEMATEL_Sensitivity <- function(obj) {
     # Customize colors
     ggplot2::scale_color_manual(
       values = c(
-        "High Cause" = "#E31A1C",    # Red - high prominence, net cause
-        "Low Cause" = "#FF7F00",     # Orange - low prominence, net cause  
-        "High Effect" = "#1F78B4",   # Blue - high prominence, net effect
-        "Low Effect" = "#33A02C"     # Green - low prominence, net effect
+        "High Cause" = "#9EDEC5",    # Red - high prominence, net cause
+        "Low Cause" = "#295073",     # Orange - low prominence, net cause  
+        "High Effect" = "#77BDD9",   # Blue - high prominence, net effect
+        "Low Effect" = "#C81102"     # Green - low prominence, net effect
       ),
       name = "Quadrant"
     ) +

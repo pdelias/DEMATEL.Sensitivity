@@ -8,6 +8,7 @@ library(shinyWidgets)
 library(DT)
 library(plotly)
 library(ggplot2)
+library(ggrepel)
 library(viridis)
 library(reshape2)
 
@@ -430,7 +431,7 @@ ui <- dashboardPage(
                   downloadButton(
                     "download_critical",
                     "📥 Download Critical Relationships",
-                    class = "btn-danger"
+                    class = "btn-primary"
                   )
                 ),
                 column(
@@ -438,9 +439,9 @@ ui <- dashboardPage(
                   div(
                     style = "text-align: right;",
                     h5("Legend:"),
-                    span("🔴 Amplifying: ", style = "color: #E31A1C;"),
+                    span("🔴 Amplifying: ", style = "color: #9EDEC5;"),
                     span("Increases λmax | "),
-                    span("🔵 Dampening: ", style = "color: #1F78B4;"),
+                    span("🔵 Stabilizing: ", style = "color: #295073;"),
                     span("Decreases λmax")
                   )
                 )
@@ -712,7 +713,7 @@ server <- function(input, output, session) {
     tryCatch({
       if (input$input_method == "example") {
         # Create example matrix
-        set.seed(42)
+        set.seed(45)
         n <- 5
         A <- matrix(0, nrow = n, ncol = n)
         for (i in 1:n) {
@@ -1227,7 +1228,7 @@ server <- function(input, output, session) {
           "Mean Absolute Sensitivity:", round(stats$mean_abs, 6), "\n",
           "Total Relationships:", stats$total_elements, "\n",
           "Amplifying (positive):", stats$n_positive, "(", round(100*stats$n_positive/stats$total_elements, 1), "%)\n",
-          "Dampening (negative):", stats$n_negative, "(", round(100*stats$n_negative/stats$total_elements, 1), "%)\n",
+          "Stabilizing (negative):", stats$n_negative, "(", round(100*stats$n_negative/stats$total_elements, 1), "%)\n",
           "Near-zero:", stats$n_zero, "(", round(100*stats$n_zero/stats$total_elements, 1), "%)"
         )
       } else {
@@ -1252,7 +1253,7 @@ server <- function(input, output, session) {
         stats <- get_sensitivity_stats(values$sensitivity_results)
         
         classification_data <- data.frame(
-          Type = c("Amplifying", "Dampening", "Near-zero"),
+          Type = c("Amplifying", "Stabilizing", "Near-zero"),
           Count = c(stats$n_positive, stats$n_negative, stats$n_zero),
           Percentage = c(
             round(100*stats$n_positive/stats$total_elements, 1),
@@ -1265,7 +1266,7 @@ server <- function(input, output, session) {
           geom_col(alpha = 0.8) +
           geom_text(aes(label = paste0(Count, "\n(", Percentage, "%)")), 
                     vjust = -0.5, fontface = "bold") +
-          scale_fill_manual(values = c("Amplifying" = "#E31A1C", "Dampening" = "#1F78B4", "Near-zero" = "#33A02C")) +
+          scale_fill_manual(values = c("Amplifying" = "#9EDEC5", "Stabilizing" = "#295073", "Near-zero" = "#F2F2F2")) +
           theme_minimal() +
           theme(legend.position = "none",
                 axis.title.x = element_blank(),
@@ -1317,7 +1318,7 @@ server <- function(input, output, session) {
       
       p <- ggplot(sens_melted, aes(x = To_Factor, y = From_Factor, fill = Sensitivity)) +
         geom_tile(color = "white", size = 0.5) +
-        scale_fill_gradient2(low = "blue", mid = "white", high = "red",
+        scale_fill_gradient2(low = "#295073", mid = "white", high = "#9EDEC5",
                              midpoint = 0, name = "Sensitivity") +
         theme_minimal() +
         theme(
@@ -1390,8 +1391,8 @@ server <- function(input, output, session) {
       }
       
       ggplot(data.frame(Sensitivity = sens_values), aes(x = Sensitivity)) +
-        geom_histogram(bins = 30, alpha = 0.7, fill = "steelblue", color = "white") +
-        geom_vline(xintercept = 0, color = "red", linetype = "dashed", size = 1) +
+        geom_histogram(bins = 30, alpha = 0.7, fill = "#295073", color = "white") +
+        geom_vline(xintercept = 0, color = "#C81102", linetype = "dashed", size = 1) +
         theme_minimal() +
         theme(plot.title = element_text(size = 14, face = "bold")) +
         labs(
@@ -1429,11 +1430,15 @@ server <- function(input, output, session) {
           top_10$relationship <- paste0(top_10$from_factor, " → ", top_10$to_factor)
           top_10$relationship <- factor(top_10$relationship, levels = rev(top_10$relationship))
           
+          ##DEBUG
+          cat("Unique interpretation values:", unique(top_10$interpretation), "\n")
+          print(table(top_10$interpretation))
+          
           ggplot(top_10, aes(x = relationship, y = sensitivity, fill = interpretation)) +
             geom_col(alpha = 0.8) +
             coord_flip() +
             scale_fill_manual(
-              values = c("Amplifying" = "#E31A1C", "Dampening" = "#1F78B4"),
+              values = c("Amplifying" = "#9EDEC5", "Stabilizer links" = "#295073"),
               name = "Effect Type"
             ) +
             theme_minimal() +

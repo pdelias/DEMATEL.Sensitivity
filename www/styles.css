@@ -550,6 +550,32 @@ textarea:focus {
   background-image: none !important;
 }
 
+/* DataTable sorting arrows - match header text color */
+.dataTable thead th.sorting:before,
+.dataTable thead th.sorting:after,
+.dataTable thead th.sorting_asc:before,
+.dataTable thead th.sorting_asc:after,
+.dataTable thead th.sorting_desc:before,
+.dataTable thead th.sorting_desc:after,
+table.dataTable thead th.sorting:before,
+table.dataTable thead th.sorting:after,
+table.dataTable thead th.sorting_asc:before,
+table.dataTable thead th.sorting_asc:after,
+table.dataTable thead th.sorting_desc:before,
+table.dataTable thead th.sorting_desc:after {
+  color: #F2F2F2 !important;
+  opacity: 1 !important;
+}
+
+/* Ensure sorting arrows are visible on hover */
+.dataTable thead th.sorting:hover:before,
+.dataTable thead th.sorting:hover:after,
+table.dataTable thead th.sorting:hover:before,
+table.dataTable thead th.sorting:hover:after {
+  color: #F2F2F2 !important;
+  opacity: 1 !important;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .content {

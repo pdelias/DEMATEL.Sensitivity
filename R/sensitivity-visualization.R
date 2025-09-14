@@ -274,16 +274,20 @@ create_dematel_interrelationship_map.DEMATEL_Sensitivity <- function(obj) {
     ggplot2::geom_point(ggplot2::aes(color = quadrant), size = 4, alpha = 0.8) +
     
     # Add factor labels
-    ggplot2::geom_text(ggplot2::aes(label = factor), 
-                       vjust = -0.8, hjust = 0.5, size = 3, fontface = "bold") +
+    ggrepel::geom_text_repel(ggplot2::aes(label = factor), 
+                             size = 3, fontface = "bold",
+                             box.padding = 0.5, 
+                             point.padding = 0.3,
+                             max.overlaps = Inf,
+                             min.segment.length = 0) +
     
     # Customize colors
     ggplot2::scale_color_manual(
       values = c(
         "High Cause" = "#9EDEC5",    # Red - high prominence, net cause
-        "Low Cause" = "#295073",     # Orange - low prominence, net cause  
+        "Low Cause" = "#F5DEB3",     # Orange - low prominence, net cause  
         "High Effect" = "#77BDD9",   # Blue - high prominence, net effect
-        "Low Effect" = "#C81102"     # Green - low prominence, net effect
+        "Low Effect" = "#295073"     # Green - low prominence, net effect
       ),
       name = "Quadrant"
     ) +

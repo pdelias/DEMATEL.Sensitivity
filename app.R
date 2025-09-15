@@ -439,10 +439,10 @@ ui <- dashboardPage(
                   div(
                     style = "text-align: right;",
                     h5("Legend:"),
-                    span("🔴 Amplifying: ", style = "color: #9EDEC5;"),
-                    span("Increases λmax | "),
-                    span("🔵 Stabilizing: ", style = "color: #295073;"),
-                    span("Decreases λmax")
+                    span("Amplifier links ", style = "color: #9EDEC5;"),
+                    span("Increases dominant eigenvalue | "),
+                    span("Stabilizer links: ", style = "color: #295073;"),
+                    span("Decreases dominant eigenvalue")
                   )
                 )
               )

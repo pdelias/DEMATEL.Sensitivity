@@ -71,8 +71,11 @@ visualize_sensitivity.DEMATEL_Sensitivity <- function(obj, save_plots = FALSE, p
   # 1. Sensitivity Heatmap (raw values)
   p1 <- ggplot2::ggplot(sens_melted, ggplot2::aes(x = To_Factor, y = From_Factor, fill = Sensitivity)) +
     ggplot2::geom_tile(color = "white", size = 0.5) +
-    ggplot2::scale_fill_gradient2(low = "blue", mid = "white", high = "red",
+    ggplot2::scale_fill_gradient2(low = "#295073", mid = "#F2F2F2", high = "#9EDEC5",
                                   midpoint = 0, name = "Sensitivity") +
+    # FIX: Add explicit factor ordering to match matrix
+    ggplot2::scale_y_discrete(limits = rev(values$factor_names)) +  # Reverse y-axis for matrix order
+    ggplot2::scale_x_discrete(limits = values$factor_names) +       # Keep x-axis in normal order
     ggplot2::theme_minimal() +
     ggplot2::theme(
       axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, size = 10),

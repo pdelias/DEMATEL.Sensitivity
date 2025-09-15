@@ -389,6 +389,8 @@ compute_sensitivity_analytical.DEMATEL_Sensitivity <- function(obj) {
     
     # Full sensitivity = local effect + normalization effect
     sensitivity_matrix <- local_matrix + normalization_matrix
+    # Enforce DEMATEL constraint: self-links are not allowed → zero diagonal
+    diag(sensitivity_matrix) <- 0
     
     # Add row and column names
     rownames(sensitivity_matrix) <- obj$factor_names

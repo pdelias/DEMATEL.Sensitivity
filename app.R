@@ -1318,8 +1318,11 @@ server <- function(input, output, session) {
       
       p <- ggplot(sens_melted, aes(x = To_Factor, y = From_Factor, fill = Sensitivity)) +
         geom_tile(color = "white", size = 0.5) +
-        scale_fill_gradient2(low = "#295073", mid = "white", high = "#9EDEC5",
+        scale_fill_gradient2(low = "#295073", mid = "#F2F2F2", high = "#9EDEC5",
                              midpoint = 0, name = "Sensitivity") +
+        # FIX: Add explicit factor ordering to match matrix
+        ggplot2::scale_y_discrete(limits = rev(values$factor_names)) +  # Reverse y-axis for matrix order
+        ggplot2::scale_x_discrete(limits = values$factor_names) +       # Keep x-axis in normal order
         theme_minimal() +
         theme(
           axis.text.x = element_text(angle = 45, hjust = 1, size = 10),

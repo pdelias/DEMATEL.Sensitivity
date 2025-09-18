@@ -424,3 +424,109 @@ example_collect_results <- function() {
 
   return(all_results)
 }
+
+# =============================================================
+# NEW: Add matrix properties checking function
+#' Check Matrix Properties for DEMATEL
+#'
+#' Checks if total relations matrix T is diagonalizable and if 
+#' direct influence matrix D is irreducible
+#'
+#' @param D Direct influence matrix (normalized)
+#' @param T Total relations matrix  
+#' @param tolerance Numerical tolerance (default: 1e-10)
+#' @return List with diagnostic information
+#' @export
+check_dematel_matrix_properties <- function(D, T, tolerance = 1e-10) {
+  
+  n <- nrow(T)
+  
+  # Check 1: Diagonalizability of T
+  eigen_result <- eigen(T)
+  eigenvalues <- eigen_result$values
+  eigenvectors <- eigen_result$vectors
+  
+  # Check if eigenvector matrix has full rank
+  eigenvector_rank <- qr(eigenvectors)$rank
+  is_diagonalizable <- (eigenvector_rank == n)
+  
+  # Check 2: Irreducibility of D (Perron-Frobenius condition)
+  # A matrix is irreducible if (I + |D|)^(n-1) has all positive entries
+  D_abs <- abs(D)
+  I <- diag(n)
+  
+  # Compute (I + |D|)^(n-1)
+  power_matrix <- I + D_abs
+  if (n > 1) {
+    for (k in 2:(n-1)) {
+      power_matrix <- power_matrix %*% (I + D_abs)
+    }
+  }
+  
+  # Check if all entries are positive
+  is_irreducible <- all(power_matrix > tolerance)
+  
+  # Additional diagnostics
+  min_power_entry <- min(power_matrix)
+  zero_entries_count <- sum(power_matrix <= tolerance)
+  
+  # Check 3: Primitive matrix (stronger condition)
+  # A matrix is primitive if some power has all positive entries
+  is_primitive <- is_irreducible  # Simplified check
+  
+  # Eigenvalue analysis
+  eigenvalues_real <- Re(eigenvalues)
+  dominant_eigenvalue <- max(eigenvalues_real)
+  eigenvalue_multiplicity <- sum(abs(eigenvalues_real - dominant_eigenvalue) < tolerance)
+  
+  # Results
+  result <- list(
+    # Diagonalizability
+    is_diagonalizable = is_diagonalizable,
+    eigenvector_rank = eigenvector_rank,
+    expected_rank = n,
+    
+    # Irreducibility  
+    is_irreducible = is_irreducible,
+    min_power_entry = min_power_entry,
+    zero_entries_in_power = zero_entries_count,
+    
+    # Additional properties
+    is_primitive = is_primitive,
+    dominant_eigenvalue = dominant_eigenvalue,
+    dominant_multiplicity = eigenvalue_multiplicity,
+    is_simple_dominant = (eigenvalue_multiplicity == 1),
+    
+    # Summary status
+    all_conditions_met = (is_diagonalizable && is_irreducible && eigenvalue_multiplicity == 1),
+    
+    # Diagnostic messages
+    messages = character()
+  )
+  
+  # Generate diagnostic messages
+  if (!is_diagonalizable) {
+    result$messages <- c(result$messages, 
+                         paste("⚠️ Matrix T is NOT diagonalizable (rank =", eigenvector_rank, "/", n, ")"))
+  } else {
+    result$messages <- c(result$messages, "✅ Matrix T is diagonalizable")
+  }
+  
+  if (!is_irreducible) {
+    result$messages <- c(result$messages, 
+                         paste("⚠️ Matrix D is NOT irreducible (", zero_entries_count, "zero entries in power matrix)"))
+  } else {
+    result$messages <- c(result$messages, "✅ Matrix D is irreducible")
+  }
+  
+  if (eigenvalue_multiplicity > 1) {
+    result$messages <- c(result$messages, 
+                         paste("⚠️ Dominant eigenvalue has multiplicity", eigenvalue_multiplicity, "(should be 1)"))
+  } else {
+    result$messages <- c(result$messages, "✅ Dominant eigenvalue is simple")
+  }
+  
+  return(result)
+}
+# END NEW
+# =============================================================

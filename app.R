@@ -55,7 +55,7 @@ ui <- dashboardPage(
       menuItem("🔍 Sensitivity Analysis", tabName = "sensitivity", icon = icon("search")),
       menuItem("🎯 Critical Relationships", tabName = "critical", icon = icon("bullseye")),
       menuItem("💡 Intervention Analysis", tabName = "intervention", icon = icon("lightbulb")),
-      menuItem("📋 Comprehensive Report", tabName = "report", icon = icon("file-alt")),
+      menuItem("📋 Reporting", tabName = "report", icon = icon("file-alt")),
       menuItem("❓ Help & Examples", tabName = "help", icon = icon("question-circle"))
     )
   ),
@@ -260,7 +260,46 @@ ui <- dashboardPage(
               h4("Dynamic Properties:"),
               verbatimTextOutput("system_dynamics")
             )
+          ),
+          # =============================================================
+          # NEW: Add Total Relations Matrix display
+          fluidRow(
+            box(
+              title = "📋 Total Relations Matrix (T)", 
+              status = "success", 
+              solidHeader = TRUE,
+              width = 12,
+              
+              h4("Complete Total Relations Matrix:"),
+              p("This matrix shows both direct and indirect influences between all factors."),
+              DT::dataTableOutput("total_relations_matrix"),
+              
+              br(),
+              downloadButton(
+                "download_T_matrix",
+                "📥 Download T Matrix (CSV)",
+                class = "btn-success"
+              )
+            )
+          ),
+          # END NEW
+          # =============================================================
+          # =============================================================
+          # NEW: Add matrix properties verification box
+          fluidRow(
+            box(
+              title = "🔍 Matrix Properties Verification", 
+              status = "info", 
+              solidHeader = TRUE,
+              width = 12,
+              
+              h4("Theoretical Conditions Check:"),
+              p("Verification of mathematical conditions required for DEMATEL analysis validity."),
+              verbatimTextOutput("matrix_properties_check")
+            )
           )
+          # END NEW
+          # =============================================================
         )
       ),
       
@@ -567,46 +606,124 @@ ui <- dashboardPage(
           condition = "output.sensitivity_computed",
           fluidRow(
             box(
-              title = "📋 Comprehensive Report", 
+              title = "📋 Executive Summary", 
               status = "success", 
               solidHeader = TRUE,
               width = 12,
               
-              h4("Executive Summary:"),
+              h4("Comprehensive Analysis Overview:"),
               verbatimTextOutput("executive_summary"),
               
               br(),
-              h4("Download Options:"),
+              p("This summary provides a complete overview of your DEMATEL sensitivity analysis results, including system configuration, mathematical validity, spectral properties, sensitivity statistics, and management recommendations.")
+            )
+          ),
+          
+          fluidRow(
+            box(
+              title = "📥 Download Comprehensive Reports", 
+              status = "primary", 
+              solidHeader = TRUE,
+              width = 6,
               
-              fluidRow(
-                column(3,
-                       downloadButton(
-                         "download_full_report",
-                         "📄 Full Report (TXT)",
-                         class = "btn-success"
-                       )
-                ),
-                column(3,
-                       downloadButton(
-                         "download_summary_report",
-                         "📝 Summary Report (CSV)",
-                         class = "btn-info"
-                       )
-                ),
-                column(3,
-                       downloadButton(
-                         "download_spectral_data",
-                         "📦 Spectral Data (CSV)",
-                         class = "btn-primary"
-                       )
-                ),
-                column(3,
-                       downloadButton(
-                         "download_sensitivity_data",
-                         "🔍 Sensitivity Data (CSV)",
-                         class = "btn-warning"
-                       )
-                )
+              h4("Complete Analysis Reports:"),
+              p("Download detailed reports with full analysis results and recommendations."),
+              
+              div(style = "margin-bottom: 15px;",
+                  downloadButton(
+                    "download_full_report",
+                    "📄 Full Comprehensive Report (TXT)",
+                    class = "btn-success btn-block"
+                  ),
+                  helpText("Detailed technical report with all analysis results, mathematical validation, and management recommendations.")
+              ),
+              
+              div(style = "margin-bottom: 15px;",
+                  downloadButton(
+                    "download_summary_report",
+                    "📊 Enhanced Summary Report (CSV)",
+                    class = "btn-info btn-block"
+                  ),
+                  helpText("Structured data summary with all key metrics for further analysis or comparison.")
+              )
+            ),
+            
+            box(
+              title = "📦 Raw Data Downloads", 
+              status = "warning", 
+              solidHeader = TRUE,
+              width = 6,
+              
+              h4("Matrix and Raw Data:"),
+              p("Download the underlying matrices and data for external analysis."),
+              
+              div(style = "margin-bottom: 15px;",
+                  downloadButton(
+                    "download_T_matrix",
+                    "📋 Total Relations Matrix (CSV)",
+                    class = "btn-success btn-block"
+                  ),
+                  helpText("Complete T matrix with factor names.")
+              ),
+              
+              div(style = "margin-bottom: 15px;",
+                  downloadButton(
+                    "download_sensitivity_data",
+                    "🔍 Sensitivity Matrix (CSV)",
+                    class = "btn-warning btn-block"
+                  ),
+                  helpText("Complete sensitivity matrix showing ∂λmax/∂aij for all relationships.")
+              ),
+              
+              div(style = "margin-bottom: 15px;",
+                  downloadButton(
+                    "download_spectral_data",
+                    "📈 Spectral Analysis Data (CSV)",
+                    class = "btn-primary btn-block"
+                  ),
+                  helpText("All eigenvalue and spectral analysis results.")
+              )
+            )
+          ),
+          
+          fluidRow(
+            box(
+              title = "📋 Report Contents Guide", 
+              status = "info", 
+              solidHeader = TRUE,
+              collapsible = TRUE,
+              width = 12,
+              
+              h4("What's Included in Each Report:"),
+              
+              h5("📄 Full Comprehensive Report:"),
+              tags$ul(
+                tags$li("Complete system configuration and validation"),
+                tags$li("Mathematical property verification (diagonalizability, irreducibility)"),
+                tags$li("Detailed spectral analysis with all eigenvalue properties"),
+                tags$li("Complete sensitivity statistics and relationship classification"),
+                tags$li("Top 10 most critical relationships with detailed analysis"),
+                tags$li("Management recommendations based on system characteristics"),
+                tags$li("Technical notes and interpretation guidelines")
+              ),
+              
+              h5("📊 Enhanced Summary Report (CSV):"),
+              tags$ul(
+                tags$li("All key metrics in structured format for analysis"),
+                tags$li("Matrix properties and validity assessment"),
+                tags$li("Spectral analysis results (λmax, condition number, etc.)"),
+                tags$li("Sensitivity statistics (mean, std dev, range, etc.)"),
+                tags$li("Relationship counts and percentages by type"),
+                tags$li("Critical relationship thresholds and counts"),
+                tags$li("System tendency and stability indicators")
+              ),
+              
+              h5("📦 Raw Data Files:"),
+              tags$ul(
+                tags$li("Original matrices with proper factor labeling"),
+                tags$li("Complete sensitivity calculations for all relationships"),
+                tags$li("All eigenvalues and eigenvector components"),
+                tags$li("Ready for import into statistical software or Excel")
               )
             )
           )
@@ -1208,6 +1325,91 @@ server <- function(input, output, session) {
     return(dynamics_text)
   })
   
+  # =============================================================
+  # NEW: Add matrix properties check output
+  output$matrix_properties_check <- renderText({
+    req(values$spectral_results)
+    
+    if (!is.null(values$spectral_results$D_matrix) && !is.null(values$spectral_results$T_matrix)) {
+      if (exists("check_dematel_matrix_properties", mode = "function")) {
+        
+        properties <- check_dematel_matrix_properties(
+          values$spectral_results$D_matrix, 
+          values$spectral_results$T_matrix
+        )
+        
+        result_text <- "MATRIX PROPERTIES VERIFICATION:\n"
+        result_text <- paste(result_text, paste(rep("=", 40), collapse = ""), "\n\n")
+        
+        # Main results
+        result_text <- paste(result_text, "DIAGONALIZABILITY:\n")
+        result_text <- paste(result_text, "  Status:", ifelse(properties$is_diagonalizable, "✅ PASSED", "❌ FAILED"), "\n")
+        result_text <- paste(result_text, "  Eigenvector matrix rank:", properties$eigenvector_rank, "/", properties$expected_rank, "\n\n")
+        
+        result_text <- paste(result_text, "IRREDUCIBILITY:\n")  
+        result_text <- paste(result_text, "  Status:", ifelse(properties$is_irreducible, "✅ PASSED", "❌ FAILED"), "\n")
+        result_text <- paste(result_text, "  Minimum power matrix entry:", round(properties$min_power_entry, 6), "\n")
+        if (properties$zero_entries_in_power > 0) {
+          result_text <- paste(result_text, "  Zero entries in power matrix:", properties$zero_entries_in_power, "\n")
+        }
+        result_text <- paste(result_text, "\n")
+        
+        result_text <- paste(result_text, "EIGENVALUE PROPERTIES:\n")
+        result_text <- paste(result_text, "  Dominant eigenvalue:", round(properties$dominant_eigenvalue, 6), "\n")
+        result_text <- paste(result_text, "  Multiplicity:", properties$dominant_multiplicity, "\n")
+        result_text <- paste(result_text, "  Simple dominant:", ifelse(properties$is_simple_dominant, "✅ YES", "❌ NO"), "\n\n")
+        
+        result_text <- paste(result_text, "OVERALL STATUS:\n")
+        result_text <- paste(result_text, "  All conditions met:", ifelse(properties$all_conditions_met, "✅ PASSED", "❌ FAILED"), "\n\n")
+        
+        result_text <- paste(result_text, "INTERPRETATION:\n")
+        for (msg in properties$messages) {
+          result_text <- paste(result_text, "  ", msg, "\n")
+        }
+        
+        if (!properties$all_conditions_met) {
+          result_text <- paste(result_text, "\n⚠️ Some theoretical conditions are not met.\n")
+          result_text <- paste(result_text, "   Results should be interpreted with caution.\n")
+        }
+        
+        return(result_text)
+        
+      } else {
+        return("Matrix properties checking function not available")
+      }
+    } else {
+      return("Matrix data not available for property checking")
+    }
+  })
+  # END NEW
+  # =============================================================
+  
+  # =============================================================
+  # NEW: Add Total Relations Matrix output
+  output$total_relations_matrix <- DT::renderDataTable({
+    req(values$spectral_results)
+    
+    if (!is.null(values$spectral_results$T_matrix)) {
+      T_matrix <- values$spectral_results$T_matrix
+      rownames(T_matrix) <- values$factor_names
+      colnames(T_matrix) <- values$factor_names
+      
+      DT::datatable(
+        T_matrix,
+        options = list(
+          pageLength = 10,
+          scrollX = TRUE,
+          scrollY = "400px",
+          dom = 'ft'
+        ),
+        caption = "Total Relations Matrix (T) - Shows direct and indirect influences"
+      ) %>% 
+        DT::formatRound(columns = 1:ncol(T_matrix), digits = 4)
+    }
+  })
+  # END NEW
+  # =============================================================
+  
   # Sensitivity analysis outputs
   output$sensitivity_stats <- renderText({
     req(values$sensitivity_results)
@@ -1618,6 +1820,129 @@ server <- function(input, output, session) {
     })
   })
   
+  # =============================================================
+  # NEW: Replace the above executive_summary with enhanced version
+  output$executive_summary <- renderText({
+    req(values$sensitivity_results)
+    
+    tryCatch({
+      if (exists("get_sensitivity_stats", mode = "function") && 
+          exists("identify_critical_relationships", mode = "function")) {
+        
+        stats <- get_sensitivity_stats(values$sensitivity_results)
+        critical_90 <- identify_critical_relationships(values$sensitivity_results, 90)
+        critical_95 <- identify_critical_relationships(values$sensitivity_results, 95)
+        
+        # Get matrix properties if available
+        properties_summary <- ""
+        if (exists("check_dematel_matrix_properties", mode = "function")) {
+          properties <- check_dematel_matrix_properties(
+            values$spectral_results$D_matrix, 
+            values$spectral_results$T_matrix
+          )
+          properties_summary <- paste(
+            "\nMATRIX VALIDITY:\n",
+            "- Diagonalizable:", ifelse(properties$is_diagonalizable, "✅ YES", "❌ NO"), "\n",
+            "- Irreducible:", ifelse(properties$is_irreducible, "✅ YES", "❌ NO"), "\n",
+            "- Simple dominant eigenvalue:", ifelse(properties$is_simple_dominant, "✅ YES", "❌ NO"), "\n",
+            "- Overall validity:", ifelse(properties$all_conditions_met, "✅ VALID", "⚠️ CHECK REQUIRED"), "\n"
+          )
+        }
+        
+        summary_text <- paste(
+          "EXECUTIVE SUMMARY - DEMATEL SENSITIVITY ANALYSIS\n",
+          paste(rep("=", 55), collapse = ""), "\n\n",
+          
+          "SYSTEM CONFIGURATION:\n",
+          "- Analysis Date:", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), "\n",
+          "- Matrix Dimensions:", values$spectral_results$n, "×", values$spectral_results$n, "\n",
+          "- Factor Names:", paste(values$factor_names, collapse = ", "), "\n",
+          "- Input Range: [", round(min(values$matrix_A), 2), ",", round(max(values$matrix_A), 2), "]\n",
+          
+          properties_summary,
+          
+          "\nSPECTRAL ANALYSIS RESULTS:\n",
+          "- Dominant Eigenvalue (λmax):", round(values$spectral_results$lambda_max, 6), "\n",
+          "- Spectral Radius:", round(values$spectral_results$spectral_radius %||% NA, 6), "\n",
+          "- Condition Number:", round(values$spectral_results$condition_number %||% NA, 2), "\n"
+        )
+        
+        if (!is.null(values$spectral_results$amplification_factor)) {
+          summary_text <- paste(summary_text,
+                                "- Amplification Factor:", round(values$spectral_results$amplification_factor, 4), "\n"
+          )
+        }
+        
+        summary_text <- paste(summary_text,
+                              "\nSENSITIVITY ANALYSIS RESULTS:\n",
+                              "- Computation Method:", values$sensitivity_results$computation_method %||% "Unknown", "\n",
+                              "- Total Relationships Analyzed:", stats$total_elements, "\n",
+                              "- Mean Sensitivity:", round(stats$mean, 6), "\n",
+                              "- Mean Absolute Sensitivity:", round(stats$mean_abs, 6), "\n",
+                              "- Standard Deviation:", round(stats$sd, 6), "\n",
+                              "- Value Range: [", round(stats$min, 6), ",", round(stats$max, 6), "]\n\n",
+                              
+                              "RELATIONSHIP CLASSIFICATION:\n",
+                              "- Amplifying Relationships:", stats$n_positive, 
+                              " (", round(100*stats$n_positive/stats$total_elements, 1), "%) - Increase λmax\n",
+                              "- Stabilizing Relationships:", stats$n_negative, 
+                              " (", round(100*stats$n_negative/stats$total_elements, 1), "%) - Decrease λmax\n",
+                              "- Near-Zero Relationships:", stats$n_zero, 
+                              " (", round(100*stats$n_zero/stats$total_elements, 1), "%) - Minimal impact\n\n",
+                              
+                              "CRITICAL RELATIONSHIP ANALYSIS:\n",
+                              "- 90th Percentile Threshold:", nrow(critical_90), "critical relationships\n",
+                              "- 95th Percentile Threshold:", nrow(critical_95), "highly critical relationships\n"
+        )
+        
+        if (nrow(critical_95) > 0) {
+          summary_text <- paste(summary_text, "\nTOP 5 MOST CRITICAL RELATIONSHIPS:\n")
+          top_5 <- head(critical_95, 5)
+          for (i in 1:nrow(top_5)) {
+            summary_text <- paste(summary_text, 
+                                  paste0(i, ". ", top_5$from_factor[i], " → ", 
+                                         top_5$to_factor[i], ": ", 
+                                         round(top_5$sensitivity[i], 6), 
+                                         " (", top_5$interpretation[i], ")\n"))
+          }
+        }
+        
+        # Add system interpretation
+        summary_text <- paste(summary_text,
+                              "\nSYSTEM INTERPRETATION:\n"
+        )
+        
+        if (stats$mean > 0) {
+          summary_text <- paste(summary_text, "- System has overall amplifying tendency (positive mean sensitivity)\n")
+        } else {
+          summary_text <- paste(summary_text, "- System has overall stabilizing tendency (negative mean sensitivity)\n")
+        }
+        
+        if (stats$n_positive > stats$n_negative) {
+          summary_text <- paste(summary_text, "- Majority of relationships are amplifying - monitor for cascading effects\n")
+        } else {
+          summary_text <- paste(summary_text, "- Majority of relationships are stabilizing - system tends towards equilibrium\n")
+        }
+        
+        if (values$spectral_results$lambda_max > 1) {
+          summary_text <- paste(summary_text, "- Dominant eigenvalue > 1: System capable of influence amplification\n")
+        } else {
+          summary_text <- paste(summary_text, "- Dominant eigenvalue ≤ 1: System exhibits bounded influence patterns\n")
+        }
+        
+        return(summary_text)
+        
+      } else {
+        return("Executive summary functions not available")
+      }
+      
+    }, error = function(e) {
+      paste("Error generating executive summary:", e$message)
+    })
+  })
+  # END NEW
+  # =============================================================
+  
   # Download handlers
   output$download_spectral <- downloadHandler(
     filename = function() {
@@ -1695,60 +2020,273 @@ server <- function(input, output, session) {
   
   output$download_full_report <- downloadHandler(
     filename = function() {
-      paste0("dematel_full_report_", Sys.Date(), ".txt")
+      paste0("dematel_comprehensive_report_", Sys.Date(), ".txt")
     },
     content = function(file) {
       if (!is.null(values$sensitivity_results)) {
-        report_content <- ""
         
-        # Add executive summary
-        if (exists("get_sensitivity_stats", mode = "function") && 
-            exists("identify_critical_relationships", mode = "function")) {
+        # Generate comprehensive report
+        stats <- get_sensitivity_stats(values$sensitivity_results)
+        critical_90 <- identify_critical_relationships(values$sensitivity_results, 90)
+        critical_95 <- identify_critical_relationships(values$sensitivity_results, 95)
+        
+        report_content <- paste(
+          "DEMATEL SENSITIVITY ANALYSIS - COMPREHENSIVE REPORT\n",
+          paste(rep("=", 60), collapse = ""), "\n\n",
           
-          stats <- get_sensitivity_stats(values$sensitivity_results)
-          critical_90 <- identify_critical_relationships(values$sensitivity_results, 90)
+          "REPORT INFORMATION:\n",
+          "Generated on:", format(Sys.time(), "%Y-%m-%d at %H:%M:%S"), "\n",
+          "Analysis Software: DEMATEL Sensitivity Analysis Shiny App\n",
+          "Report Version: 1.0\n\n",
           
-          report_content <- paste(
-            "DEMATEL COMPREHENSIVE ANALYSIS REPORT\n",
-            "=====================================\n\n",
-            "Generated on:", Sys.time(), "\n\n",
-            "SYSTEM OVERVIEW:\n",
-            "Matrix size:", values$spectral_results$n, "×", values$spectral_results$n, "\n",
-            "Factors:", paste(values$factor_names, collapse = ", "), "\n",
-            "Dominant eigenvalue (λmax):", round(values$spectral_results$lambda_max, 6), "\n\n",
-            
-            "SENSITIVITY ANALYSIS RESULTS:\n",
-            "Method:", values$sensitivity_results$computation_method %||% "Unknown", "\n",
-            "Total relationships:", stats$total_elements, "\n",
-            "Mean absolute sensitivity:", round(stats$mean_abs, 6), "\n",
-            "Amplifying relationships:", stats$n_positive, "\n",
-            "Dampening relationships:", stats$n_negative, "\n",
-            "Critical relationships (90th percentile):", nrow(critical_90), "\n\n"
+          "SYSTEM CONFIGURATION:\n",
+          paste(rep("-", 25), collapse = ""), "\n",
+          "Matrix Size:", values$spectral_results$n, "×", values$spectral_results$n, "\n",
+          "Factor Names:", paste(values$factor_names, collapse = ", "), "\n",
+          "Original Matrix Range: [", round(min(values$matrix_A), 2), ",", round(max(values$matrix_A), 2), "]\n",
+          "Diagonal Sum:", sum(diag(values$matrix_A)), "(should be 0 for proper DEMATEL)\n\n"
+        )
+        
+        # Add matrix properties if available
+        if (exists("check_dematel_matrix_properties", mode = "function")) {
+          properties <- check_dematel_matrix_properties(
+            values$spectral_results$D_matrix, 
+            values$spectral_results$T_matrix
+          )
+          
+          report_content <- paste(report_content,
+                                  "MATHEMATICAL VALIDITY ASSESSMENT:\n",
+                                  paste(rep("-", 35), collapse = ""), "\n",
+                                  "Matrix T Diagonalizability:", ifelse(properties$is_diagonalizable, "PASSED", "FAILED"), "\n",
+                                  "  - Eigenvector matrix rank:", properties$eigenvector_rank, "out of", properties$expected_rank, "\n",
+                                  "Matrix D Irreducibility:", ifelse(properties$is_irreducible, "PASSED", "FAILED"), 
+                                  "Matrix D Irreducibility:", ifelse(properties$is_irreducible, "PASSED", "FAILED"), "\n",
+                                  "  - Minimum power matrix entry:", round(properties$min_power_entry, 8), "\n",
+                                  "  - Zero entries in connectivity test:", properties$zero_entries_in_power, "\n",
+                                  "Dominant Eigenvalue Properties:\n",
+                                  "  - Value:", round(properties$dominant_eigenvalue, 8), "\n",
+                                  "  - Multiplicity:", properties$dominant_multiplicity, "(should be 1)\n",
+                                  "  - Is Simple:", ifelse(properties$is_simple_dominant, "YES", "NO"), "\n",
+                                  "Overall Theoretical Validity:", ifelse(properties$all_conditions_met, "PASSED", "CAUTION REQUIRED"), "\n\n"
           )
         }
+        
+        report_content <- paste(report_content,
+                                "SPECTRAL ANALYSIS RESULTS:\n",
+                                paste(rep("-", 28), collapse = ""), "\n",
+                                "Dominant Eigenvalue (λmax):", round(values$spectral_results$lambda_max, 8), "\n"
+        )
+        
+        if (!is.null(values$spectral_results$lambda_2)) {
+          report_content <- paste(report_content,
+                                  "Second Largest Eigenvalue:", round(values$spectral_results$lambda_2, 8), "\n",
+                                  "Eigenvalue Gap (λmax - λ2):", round(values$spectral_results$lambda_max - values$spectral_results$lambda_2, 8), "\n"
+          )
+        }
+        
+        if (!is.null(values$spectral_results$spectral_radius)) {
+          report_content <- paste(report_content,
+                                  "Spectral Radius:", round(values$spectral_results$spectral_radius, 8), "\n"
+          )
+        }
+        
+        if (!is.null(values$spectral_results$condition_number)) {
+          report_content <- paste(report_content,
+                                  "Condition Number:", round(values$spectral_results$condition_number, 4), "\n"
+          )
+        }
+        
+        report_content <- paste(report_content,
+                                "\nSENSITIVITY ANALYSIS RESULTS:\n",
+                                paste(rep("-", 31), collapse = ""), "\n",
+                                "Computation Method:", values$sensitivity_results$computation_method %||% "Unknown", "\n",
+                                "Analysis Scope:", stats$total_elements, "relationships analyzed\n",
+                                "Statistical Summary:\n",
+                                "  - Mean Sensitivity:", round(stats$mean, 8), "\n",
+                                "  - Standard Deviation:", round(stats$sd, 8), "\n",
+                                "  - Minimum Value:", round(stats$min, 8), "\n",
+                                "  - Maximum Value:", round(stats$max, 8), "\n",
+                                "  - Mean Absolute Value:", round(stats$mean_abs, 8), "\n",
+                                "  - Median:", round(stats$median, 8), "\n\n",
+                                
+                                "RELATIONSHIP CLASSIFICATION:\n",
+                                paste(rep("-", 30), collapse = ""), "\n",
+                                "Amplifying Relationships (Positive Sensitivity):", stats$n_positive, "\n",
+                                "  - Percentage of total:", round(100*stats$n_positive/stats$total_elements, 2), "%\n",
+                                "  - Interpretation: Strengthening these relationships increases λmax\n",
+                                "Stabilizing Relationships (Negative Sensitivity):", stats$n_negative, "\n", 
+                                "  - Percentage of total:", round(100*stats$n_negative/stats$total_elements, 2), "%\n",
+                                "  - Interpretation: Strengthening these relationships decreases λmax\n",
+                                "Near-Zero Impact Relationships:", stats$n_zero, "\n",
+                                "  - Percentage of total:", round(100*stats$n_zero/stats$total_elements, 2), "%\n",
+                                "  - Interpretation: Minimal impact on system eigenvalue\n\n"
+        )
+        
+        # Critical relationships analysis
+        report_content <- paste(report_content,
+                                "CRITICAL RELATIONSHIPS ANALYSIS:\n",
+                                paste(rep("-", 36), collapse = ""), "\n",
+                                "90th Percentile Threshold Analysis:\n",
+                                "  - Number of critical relationships:", nrow(critical_90), "\n",
+                                "  - Threshold value:", ifelse(nrow(critical_90) > 0, round(min(critical_90$abs_sensitivity), 6), "N/A"), "\n",
+                                "95th Percentile Threshold Analysis:\n",
+                                "  - Number of highly critical relationships:", nrow(critical_95), "\n",
+                                "  - Threshold value:", ifelse(nrow(critical_95) > 0, round(min(critical_95$abs_sensitivity), 6), "N/A"), "\n\n"
+        )
+        
+        if (nrow(critical_95) > 0) {
+          report_content <- paste(report_content,
+                                  "TOP 10 MOST CRITICAL RELATIONSHIPS (95th Percentile):\n",
+                                  paste(rep("-", 50), collapse = ""), "\n"
+          )
+          
+          top_10 <- head(critical_95, 10)
+          for (i in 1:nrow(top_10)) {
+            report_content <- paste(report_content,
+                                    sprintf("%2d. %s → %s\n", i, top_10$from_factor[i], top_10$to_factor[i]),
+                                    sprintf("    Sensitivity: %12.8f\n", top_10$sensitivity[i]),
+                                    sprintf("    Abs. Value:  %12.8f\n", top_10$abs_sensitivity[i]),
+                                    sprintf("    Effect Type: %s\n", top_10$interpretation[i]),
+                                    sprintf("    Matrix Pos:  [%d,%d]\n\n", top_10$from_index[i], top_10$to_index[i])
+            )
+          }
+        }
+        
+        # System recommendations
+        report_content <- paste(report_content,
+                                "MANAGEMENT RECOMMENDATIONS:\n",
+                                paste(rep("-", 29), collapse = ""), "\n"
+        )
+        
+        if (stats$mean > 0.001) {
+          report_content <- paste(report_content,
+                                  "• System shows overall amplifying behavior (positive mean sensitivity)\n",
+                                  "  → Monitor for potential cascading effects\n",
+                                  "  → Consider stabilizing interventions if amplification is excessive\n\n"
+          )
+        } else if (stats$mean < -0.001) {
+          report_content <- paste(report_content,
+                                  "• System shows overall dampening behavior (negative mean sensitivity)\n",
+                                  "  → System naturally tends toward stability\n",
+                                  "  → May need amplifying interventions to increase responsiveness\n\n"
+          )
+        }
+        
+        if (stats$n_positive > stats$n_negative) {
+          report_content <- paste(report_content,
+                                  "• Majority of relationships are amplifying\n",
+                                  "  → Strengthen positive relationships carefully to avoid instability\n",
+                                  "  → Consider introducing stabilizing mechanisms\n\n"
+          )
+        }
+        
+        if (nrow(critical_95) > 0) {
+          report_content <- paste(report_content,
+                                  "• Focus intervention efforts on the", nrow(critical_95), "most critical relationships\n",
+                                  "• Small changes in these relationships will have large system impacts\n",
+                                  "• Prioritize monitoring and control of these key connections\n\n"
+          )
+        }
+        
+        # Technical notes
+        report_content <- paste(report_content,
+                                "TECHNICAL NOTES:\n",
+                                paste(rep("-", 16), collapse = ""), "\n",
+                                "• Sensitivity values represent ∂λmax/∂aij (partial derivatives)\n",
+                                "• Positive sensitivity = amplifying relationship\n",
+                                "• Negative sensitivity = stabilizing relationship\n",
+                                "• Higher absolute values indicate greater system impact\n",
+                                "• Results based on eigenvalue perturbation theory\n",
+                                "• Theoretical validity depends on matrix properties listed above\n\n",
+                                
+                                "END OF REPORT\n",
+                                paste(rep("=", 60), collapse = ""), "\n"
+        )
         
         writeLines(report_content, file)
       }
     }
   )
+  # END NEW
+  # =============================================================
   
+  # Enhanced Summary Report  
   output$download_summary_report <- downloadHandler(
     filename = function() {
-      paste0("dematel_summary_", Sys.Date(), ".csv")
+      paste0("dematel_enhanced_summary_", Sys.Date(), ".csv")
     },
     content = function(file) {
       if (!is.null(values$sensitivity_results) && exists("get_sensitivity_stats", mode = "function")) {
+        
         stats <- get_sensitivity_stats(values$sensitivity_results)
+        critical_90 <- identify_critical_relationships(values$sensitivity_results, 90)
+        critical_95 <- identify_critical_relationships(values$sensitivity_results, 95)
+        
+        # Get matrix properties if available
+        is_diagonalizable <- NA
+        is_irreducible <- NA
+        overall_validity <- "Unknown"
+        
+        if (exists("check_dematel_matrix_properties", mode = "function")) {
+          properties <- check_dematel_matrix_properties(
+            values$spectral_results$D_matrix, 
+            values$spectral_results$T_matrix
+          )
+          is_diagonalizable <- properties$is_diagonalizable
+          is_irreducible <- properties$is_irreducible
+          overall_validity <- ifelse(properties$all_conditions_met, "Valid", "Check Required")
+        }
         
         summary_df <- data.frame(
-          Analysis_Date = Sys.Date(),
+          # Basic Information
+          Analysis_Date = as.character(Sys.Date()),
+          Analysis_Time = format(Sys.time(), "%H:%M:%S"),
           Matrix_Size = paste0(values$spectral_results$n, "x", values$spectral_results$n),
+          Factor_Names = paste(values$factor_names, collapse = "; "),
+          
+          # Matrix Properties
+          Is_Diagonalizable = is_diagonalizable,
+          Is_Irreducible = is_irreducible,
+          Overall_Validity = overall_validity,
+          
+          # Spectral Analysis
           Lambda_Max = values$spectral_results$lambda_max,
+          Lambda_2 = ifelse(is.null(values$spectral_results$lambda_2), NA, values$spectral_results$lambda_2),
+          Spectral_Radius = ifelse(is.null(values$spectral_results$spectral_radius), NA, values$spectral_results$spectral_radius),
+          Condition_Number = ifelse(is.null(values$spectral_results$condition_number), NA, values$spectral_results$condition_number),
+          Amplification_Factor = ifelse(is.null(values$spectral_results$amplification_factor), NA, values$spectral_results$amplification_factor),
+          
+          # Sensitivity Statistics
+          Sensitivity_Method = ifelse(is.null(values$sensitivity_results$computation_method), "Unknown", values$sensitivity_results$computation_method),
           Mean_Sensitivity = stats$mean,
+          Std_Dev_Sensitivity = stats$sd,
+          Min_Sensitivity = stats$min,
+          Max_Sensitivity = stats$max,
           Mean_Abs_Sensitivity = stats$mean_abs,
+          Median_Sensitivity = stats$median,
+          
+          # Relationship Classification
+          Total_Relationships = stats$total_elements,
           Amplifying_Count = stats$n_positive,
-          Dampening_Count = stats$n_negative,
-          Method = values$sensitivity_results$computation_method %||% "Unknown"
+          Amplifying_Percent = round(100*stats$n_positive/stats$total_elements, 2),
+          Stabilizing_Count = stats$n_negative,
+          Stabilizing_Percent = round(100*stats$n_negative/stats$total_elements, 2),
+          Near_Zero_Count = stats$n_zero,
+          Near_Zero_Percent = round(100*stats$n_zero/stats$total_elements, 2),
+          
+          # Critical Relationships
+          Critical_90th_Count = nrow(critical_90),
+          Critical_95th_Count = nrow(critical_95),
+          Critical_90th_Threshold = ifelse(nrow(critical_90) > 0, min(critical_90$abs_sensitivity), NA),
+          Critical_95th_Threshold = ifelse(nrow(critical_95) > 0, min(critical_95$abs_sensitivity), NA),
+          
+          # System Characteristics
+          Overall_Tendency = ifelse(stats$mean > 0.001, "Amplifying", 
+                                    ifelse(stats$mean < -0.001, "Stabilizing", "Neutral")),
+          Dominant_Relationship_Type = ifelse(stats$n_positive > stats$n_negative, "Amplifying", "Stabilizing"),
+          System_Stability = ifelse(values$spectral_results$lambda_max <= 1, "Bounded", "Amplifying"),
+          
+          stringsAsFactors = FALSE
         )
         
         write.csv(summary_df, file, row.names = FALSE)
@@ -1777,6 +2315,24 @@ server <- function(input, output, session) {
       }
     }
   )
+  
+  # =============================================================
+  # NEW: Add T matrix download handler
+  output$download_T_matrix <- downloadHandler(
+    filename = function() {
+      paste0("total_relations_matrix_", Sys.Date(), ".csv")
+    },
+    content = function(file) {
+      if (!is.null(values$spectral_results$T_matrix)) {
+        T_matrix <- values$spectral_results$T_matrix
+        rownames(T_matrix) <- values$factor_names
+        colnames(T_matrix) <- values$factor_names
+        write.csv(T_matrix, file, row.names = TRUE)
+      }
+    }
+  )
+  # END NEW
+  # =============================================================
   
   # Helper function for null coalescing
   `%||%` <- function(x, y) {

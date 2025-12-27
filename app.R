@@ -176,7 +176,7 @@ ui <- dashboardPage(
             
             conditionalPanel(
               condition = "output.matrix_processed",
-              h5("Original Matrix A:"),
+              uiOutput("matrix_type_label"),
               DT::dataTableOutput("matrix_preview"),
               br(),
               h5("Matrix Information:"),
@@ -1277,6 +1277,23 @@ server <- function(input, output, session) {
     is.null(values$upload_type) || (!values$upload_type %in% c("D", "T"))
   })
   outputOptions(output, "a_matrix_available", suspendWhenHidden = FALSE)
+
+  # Matrix type label (dynamic based on upload type)
+  output$matrix_type_label <- renderUI({
+    req(values$matrix_processed)
+
+    if (!is.null(values$upload_type)) {
+      if (values$upload_type == "D") {
+        h5("Normalized Direct Influence Matrix (D):")
+      } else if (values$upload_type == "T") {
+        h5("Total Relations Matrix (T):")
+      } else {
+        h5("Original Direct Influence Matrix (A):")
+      }
+    } else {
+      h5("Original Direct Influence Matrix (A):")
+    }
+  })
 
   # Matrix preview and info
   output$matrix_preview <- DT::renderDataTable({

@@ -84,6 +84,8 @@ ui <- dashboardPage(
               "Select input method:",
               choices = list(
                 "Upload CSV file with original direct influence matrix (A)" = "upload_A",
+                "Upload CSV file with normalized direct influence matrix (D)" = "upload_D",
+                "Upload CSV file with total relations matrix (T)" = "upload_T",
                 "Use example dataset" = "example"
               ),
               selected = "example"
@@ -97,24 +99,55 @@ ui <- dashboardPage(
                 "Choose CSV File (Original Direct Influence Matrix A):",
                 accept = c(".csv")
               ),
-              
+
               checkboxInput("header_A", "File has header", value = FALSE),
-              
-              helpText("The original direct influence matrix should contain the raw expert judgments (typically 0-4 scale). 
+
+              helpText("The original direct influence matrix should contain the raw expert judgments (typically 0-4 scale).
                        Diagonal elements should be zero (no self-influence).")
             ),
-            
+
+            conditionalPanel(
+              condition = "input.input_method == 'upload_D'",
+              h4("Upload Normalized Matrix D"),
+              fileInput(
+                "file_D",
+                "Choose CSV File (Normalized Direct Influence Matrix D):",
+                accept = c(".csv")
+              ),
+
+              checkboxInput("header_D", "File has header", value = FALSE),
+
+              helpText("The normalized direct influence matrix D is obtained by dividing matrix A by the normalization factor s = max(sum of rows, sum of columns).
+                       All values should be between 0 and 1. Diagonal elements should be zero.")
+            ),
+
+            conditionalPanel(
+              condition = "input.input_method == 'upload_T'",
+              h4("Upload Total Relations Matrix T"),
+              fileInput(
+                "file_T",
+                "Choose CSV File (Total Relations Matrix T):",
+                accept = c(".csv")
+              ),
+
+              checkboxInput("header_T", "File has header", value = FALSE),
+
+              helpText("The total relations matrix T captures both direct and indirect influences between factors.
+                       It is calculated as T = D + D² + D³ + ... = (I - D)⁻¹ - I.
+                       Diagonal elements may be non-zero (representing total self-influence through indirect paths).")
+            ),
+
             conditionalPanel(
               condition = "input.input_method == 'example'",
               h4("📋 Using Example Dataset"),
-              p("A 5×5 example matrix will be loaded automatically.", 
+              p("A 5×5 example matrix will be loaded automatically.",
                 style = "color: #666; font-style: italic;")
             ),
             
             br(),
             
             conditionalPanel(
-              condition = "input.input_method == 'upload_A'",
+              condition = "input.input_method == 'upload_A' || input.input_method == 'upload_D' || input.input_method == 'upload_T'",
               h4("Step 2: Optional Settings"),
               textAreaInput(
                 "factor_names_input",
@@ -122,7 +155,7 @@ ui <- dashboardPage(
                 placeholder = "e.g., Leadership, Communication, Risk Management, Innovation, Quality",
                 height = "60px"
               ),
-              
+
               helpText("Leave empty to use default names (F1, F2, F3, ...)")
             ),
             
@@ -814,6 +847,9 @@ server <- function(input, output, session) {
   # Reactive values to store data and results
   values <- reactiveValues(
     matrix_A = NULL,
+    D_matrix = NULL,
+    T_matrix = NULL,
+    upload_type = NULL,
     spectral_results = NULL,
     sensitivity_results = NULL,
     intervention_results = NULL,
@@ -846,28 +882,29 @@ server <- function(input, output, session) {
         
         factor_names <- c("Leadership", "Communication", "Innovation", "Risk_Management", "Quality")
         rownames(A) <- colnames(A) <- factor_names
-        
+
         values$matrix_A <- A
         values$factor_names <- factor_names
-        
+        values$upload_type <- NULL  # Reset upload type for example data
+
       } else if (input$input_method == "upload_A") {
         req(input$file_A)
-        
+
         # Read uploaded file
         A_raw <- read_csv_robust(input$file_A$datapath, header = input$header_A)
        # A_raw <- read.csv(input$file_A$datapath, header = input$header_A, stringsAsFactors = FALSE)
         A <- as.matrix(A_raw)
         mode(A) <- "numeric"
-        
+
         # Validate matrix
         if (nrow(A) != ncol(A)) {
           stop("Matrix must be square")
         }
-        
+
         if (any(is.na(A)) || any(!is.finite(A))) {
           stop("Matrix must contain only finite numeric values")
         }
-        
+
         # Handle factor names
         if (nzchar(input$factor_names_input)) {
           factor_names <- trimws(strsplit(input$factor_names_input, ",")[[1]])
@@ -877,27 +914,136 @@ server <- function(input, output, session) {
         } else {
           factor_names <- paste0("F", 1:nrow(A))
         }
-        
+
         rownames(A) <- colnames(A) <- factor_names
-        
+
         values$matrix_A <- A
         values$factor_names <- factor_names
+        values$upload_type <- NULL  # Reset upload type for A matrix
+
+      } else if (input$input_method == "upload_D") {
+        req(input$file_D)
+
+        # Read uploaded file
+        D_raw <- read_csv_robust(input$file_D$datapath, header = input$header_D)
+        D <- as.matrix(D_raw)
+        mode(D) <- "numeric"
+
+        # Validate matrix
+        if (nrow(D) != ncol(D)) {
+          stop("Matrix must be square")
+        }
+
+        if (any(is.na(D)) || any(!is.finite(D))) {
+          stop("Matrix must contain only finite numeric values")
+        }
+
+        # Validate D matrix properties (values should be between 0 and 1)
+        if (any(D < 0) || any(D > 1)) {
+          showNotification("⚠️ Warning: D matrix values should typically be between 0 and 1", type = "warning", duration = 5)
+        }
+
+        # Handle factor names
+        if (nzchar(input$factor_names_input)) {
+          factor_names <- trimws(strsplit(input$factor_names_input, ",")[[1]])
+          if (length(factor_names) != nrow(D)) {
+            stop(paste("Number of factor names (", length(factor_names), ") must equal matrix size (", nrow(D), ")"))
+          }
+        } else {
+          factor_names <- paste0("F", 1:nrow(D))
+        }
+
+        rownames(D) <- colnames(D) <- factor_names
+
+        # Store D matrix and set A to D (since we don't know the original scale)
+        values$matrix_A <- D
+        values$D_matrix <- D
+        values$factor_names <- factor_names
+        values$upload_type <- "D"
+
+      } else if (input$input_method == "upload_T") {
+        req(input$file_T)
+
+        # Read uploaded file
+        T_raw <- read_csv_robust(input$file_T$datapath, header = input$header_T)
+        T_matrix <- as.matrix(T_raw)
+        mode(T_matrix) <- "numeric"
+
+        # Validate matrix
+        if (nrow(T_matrix) != ncol(T_matrix)) {
+          stop("Matrix must be square")
+        }
+
+        if (any(is.na(T_matrix)) || any(!is.finite(T_matrix))) {
+          stop("Matrix must contain only finite numeric values")
+        }
+
+        # Handle factor names
+        if (nzchar(input$factor_names_input)) {
+          factor_names <- trimws(strsplit(input$factor_names_input, ",")[[1]])
+          if (length(factor_names) != nrow(T_matrix)) {
+            stop(paste("Number of factor names (", length(factor_names), ") must equal matrix size (", nrow(T_matrix), ")"))
+          }
+        } else {
+          factor_names <- paste0("F", 1:nrow(T_matrix))
+        }
+
+        rownames(T_matrix) <- colnames(T_matrix) <- factor_names
+
+        # Compute D from T: D = I - (T + I)^(-1)
+        n <- nrow(T_matrix)
+        I <- diag(n)
+        tryCatch({
+          D <- I - solve(T_matrix + I)
+
+          # Store matrices
+          values$matrix_A <- D  # Set A to D since we don't know original scale
+          values$D_matrix <- D
+          values$T_matrix <- T_matrix
+          values$factor_names <- factor_names
+          values$upload_type <- "T"
+        }, error = function(e) {
+          stop(paste("Error computing D from T matrix:", e$message, "\nThe T matrix may be invalid."))
+        })
       }
       
-      # Compute DEMATEL matrices
-      if (exists("compute_dematel_matrices", mode = "function")) {
-        dematel_matrices <- compute_dematel_matrices(values$matrix_A)
-      } else {
-        # Fallback computation
-        n <- nrow(values$matrix_A)
-        s <- max(max(rowSums(values$matrix_A)), max(colSums(values$matrix_A)))
-        D <- values$matrix_A / s
+      # Compute DEMATEL matrices based on upload type
+      if (!is.null(values$upload_type) && values$upload_type == "D") {
+        # D matrix was uploaded directly, compute T from D
+        D <- values$D_matrix
+        n <- nrow(D)
         I <- diag(n)
         T_matrix <- solve(I - D) - I
         eigenvals <- eigen(T_matrix, only.values = TRUE)$values
         lambda_max <- max(Re(eigenvals))
-        
+
         dematel_matrices <- list(D = D, T = T_matrix, lambda_max = lambda_max)
+
+      } else if (!is.null(values$upload_type) && values$upload_type == "T") {
+        # T matrix was uploaded directly, D was already computed
+        D <- values$D_matrix
+        T_matrix <- values$T_matrix
+        eigenvals <- eigen(T_matrix, only.values = TRUE)$values
+        lambda_max <- max(Re(eigenvals))
+
+        dematel_matrices <- list(D = D, T = T_matrix, lambda_max = lambda_max)
+
+      } else {
+        # A matrix was uploaded or example used, compute D and T normally
+        if (exists("compute_dematel_matrices", mode = "function")) {
+          dematel_matrices <- compute_dematel_matrices(values$matrix_A)
+        } else {
+          # Fallback computation
+          n <- nrow(values$matrix_A)
+          s <- max(max(rowSums(values$matrix_A)), max(colSums(values$matrix_A)))
+          D <- values$matrix_A / s
+          I <- diag(n)
+          T_matrix <- solve(I - D) - I
+          eigenvals <- eigen(T_matrix, only.values = TRUE)$values
+          lambda_max <- max(Re(eigenvals))
+
+          dematel_matrices <- list(D = D, T = T_matrix, lambda_max = lambda_max)
+        }
       }
       
       # ENHANCED: Perform complete spectral analysis

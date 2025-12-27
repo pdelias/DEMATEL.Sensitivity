@@ -343,23 +343,46 @@ ui <- dashboardPage(
           condition = "!output.matrix_processed",
           fluidRow(
             box(
-              title = "⚠️ Data Required", 
-              status = "warning", 
+              title = "⚠️ Data Required",
+              status = "warning",
               solidHeader = TRUE,
               width = 12,
-              
+
               div(
                 style = "text-align: center; padding: 50px;",
                 icon("exclamation-triangle", style = "font-size: 48px; color: #f39c12;"),
-                h4("Please upload and process a matrix first in the Data Input tab.", 
+                h4("Please upload and process a matrix first in the Data Input tab.",
                    style = "color: #856404; margin-top: 20px;")
               )
             )
           )
         ),
-        
+
         conditionalPanel(
-          condition = "output.matrix_processed",
+          condition = "output.matrix_processed && !output.a_matrix_available",
+          fluidRow(
+            box(
+              title = "⚠️ Feature Not Available",
+              status = "warning",
+              solidHeader = TRUE,
+              width = 12,
+
+              div(
+                style = "text-align: center; padding: 50px;",
+                icon("info-circle", style = "font-size: 48px; color: #f39c12;"),
+                h4("Sensitivity analysis is not available when uploading D or T matrices directly.",
+                   style = "color: #856404; margin-top: 20px;"),
+                p("Sensitivity analysis requires the original A matrix values to compute how changes affect the results.",
+                  style = "color: #666; margin-top: 10px;"),
+                p("Please upload the original direct relations matrix (A) to use this feature.",
+                  style = "color: #666;")
+              )
+            )
+          )
+        ),
+
+        conditionalPanel(
+          condition = "output.matrix_processed && output.a_matrix_available",
           fluidRow(
             box(
               title = "⚙️ Sensitivity Analysis Settings", 
@@ -465,14 +488,54 @@ ui <- dashboardPage(
       tabItem(
         tabName = "critical",
         conditionalPanel(
-          condition = "!output.sensitivity_computed",
+          condition = "!output.matrix_processed",
           fluidRow(
             box(
-              title = "⚠️ Data Required", 
-              status = "warning", 
+              title = "⚠️ Data Required",
+              status = "warning",
               solidHeader = TRUE,
               width = 12,
-              
+
+              div(
+                style = "text-align: center; padding: 50px;",
+                h4("Please upload and process a matrix first.")
+              )
+            )
+          )
+        ),
+
+        conditionalPanel(
+          condition = "output.matrix_processed && !output.a_matrix_available",
+          fluidRow(
+            box(
+              title = "⚠️ Feature Not Available",
+              status = "warning",
+              solidHeader = TRUE,
+              width = 12,
+
+              div(
+                style = "text-align: center; padding: 50px;",
+                icon("info-circle", style = "font-size: 48px; color: #f39c12;"),
+                h4("Critical relationships analysis is not available when uploading D or T matrices directly.",
+                   style = "color: #856404; margin-top: 20px;"),
+                p("This analysis requires the original A matrix values to compute sensitivity of relationships.",
+                  style = "color: #666; margin-top: 10px;"),
+                p("Please upload the original direct relations matrix (A) to use this feature.",
+                  style = "color: #666;")
+              )
+            )
+          )
+        ),
+
+        conditionalPanel(
+          condition = "!output.sensitivity_computed && output.a_matrix_available",
+          fluidRow(
+            box(
+              title = "⚠️ Data Required",
+              status = "warning",
+              solidHeader = TRUE,
+              width = 12,
+
               div(
                 style = "text-align: center; padding: 50px;",
                 h4("Please complete sensitivity analysis first.")
@@ -480,9 +543,9 @@ ui <- dashboardPage(
             )
           )
         ),
-        
+
         conditionalPanel(
-          condition = "output.sensitivity_computed",
+          condition = "output.sensitivity_computed && output.a_matrix_available",
           fluidRow(
             box(
               title = "🎯 Critical Relationships Analysis", 
@@ -527,14 +590,54 @@ ui <- dashboardPage(
       tabItem(
         tabName = "intervention",
         conditionalPanel(
-          condition = "!output.sensitivity_computed",
+          condition = "!output.matrix_processed",
           fluidRow(
             box(
-              title = "⚠️ Data Required", 
-              status = "warning", 
+              title = "⚠️ Data Required",
+              status = "warning",
               solidHeader = TRUE,
               width = 12,
-              
+
+              div(
+                style = "text-align: center; padding: 50px;",
+                h4("Please upload and process a matrix first.")
+              )
+            )
+          )
+        ),
+
+        conditionalPanel(
+          condition = "output.matrix_processed && !output.a_matrix_available",
+          fluidRow(
+            box(
+              title = "⚠️ Feature Not Available",
+              status = "warning",
+              solidHeader = TRUE,
+              width = 12,
+
+              div(
+                style = "text-align: center; padding: 50px;",
+                icon("info-circle", style = "font-size: 48px; color: #f39c12;"),
+                h4("Intervention analysis is not available when uploading D or T matrices directly.",
+                   style = "color: #856404; margin-top: 20px;"),
+                p("This analysis requires the original A matrix values to recommend specific interventions.",
+                  style = "color: #666; margin-top: 10px;"),
+                p("Please upload the original direct relations matrix (A) to use this feature.",
+                  style = "color: #666;")
+              )
+            )
+          )
+        ),
+
+        conditionalPanel(
+          condition = "!output.sensitivity_computed && output.a_matrix_available",
+          fluidRow(
+            box(
+              title = "⚠️ Data Required",
+              status = "warning",
+              solidHeader = TRUE,
+              width = 12,
+
               div(
                 style = "text-align: center; padding: 50px;",
                 h4("Please complete sensitivity analysis first.")
@@ -542,9 +645,9 @@ ui <- dashboardPage(
             )
           )
         ),
-        
+
         conditionalPanel(
-          condition = "output.sensitivity_computed",
+          condition = "output.sensitivity_computed && output.a_matrix_available",
           fluidRow(
             box(
               title = "⚙️ Intervention Settings", 
@@ -1169,7 +1272,12 @@ server <- function(input, output, session) {
     values$intervention_computed
   })
   outputOptions(output, "intervention_computed", suspendWhenHidden = FALSE)
-  
+
+  output$a_matrix_available <- reactive({
+    is.null(values$upload_type) || (!values$upload_type %in% c("D", "T"))
+  })
+  outputOptions(output, "a_matrix_available", suspendWhenHidden = FALSE)
+
   # Matrix preview and info
   output$matrix_preview <- DT::renderDataTable({
     req(values$matrix_A)

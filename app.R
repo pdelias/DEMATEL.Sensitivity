@@ -5,8 +5,10 @@
 library(shiny)
 library(shinydashboard)
 library(shinyWidgets)
+# plotly is deliberately not loaded: the application never calls it, and it
+# drags stringi, data.table, openssl, curl and httr into the WebAssembly
+# bundle -- about 15 MB on every first visit, for nothing.
 library(DT)
-library(plotly)
 library(ggplot2)
 library(ggrepel)
 library(viridis)

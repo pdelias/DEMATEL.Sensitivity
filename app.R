@@ -1017,21 +1017,28 @@ server <- function(input, output, session) {
     
     tryCatch({
       if (input$input_method == "example") {
-        # Create example matrix
-        set.seed(45)
-        n <- 5
-        A <- matrix(0, nrow = n, ncol = n)
-        for (i in 1:n) {
-          for (j in 1:n) {
-            if (i != j) {
-              A[i, j] <- sample(0:4, 1, prob = c(0.2, 0.3, 0.3, 0.15, 0.05))
-            }
-          }
-        }
-        # # Load example data
-        # example_text <- "0,3,3,1,3\n0,0,2,0,1\n0,0,0,2,0\n3,1,2,0,3\n4,1,2,1,0"
-        # A <- as.matrix(read.csv(textConnection(example_text), header = FALSE))
-        
+        # The example matrix, written out rather than generated.
+        #
+        # This is exactly what the previous set.seed(45) loop produced, so the
+        # example a user sees is unchanged. Writing it down removes a real side
+        # effect: set.seed() inside an observer resets the session's global RNG,
+        # so clicking this button silently changed the result of anything
+        # stochastic afterwards -- a surrogate ensemble run without an explicit
+        # seed, for instance. It also means the example is legible here, in the
+        # source, instead of being whatever a loop happens to emit.
+        #
+        # It is a good example on purpose: strongly connected, zero diagonal,
+        # every assumption check passing, eight of the twenty links stabilising
+        # rather than amplifying, and an entry ranking that disagrees sharply
+        # with prominence (Spearman 0.2) -- which is the methodological point
+        # the application exists to make.
+        A <- matrix(c(0, 0, 2, 1, 2,
+                      2, 0, 1, 1, 2,
+                      1, 1, 0, 2, 3,
+                      2, 2, 2, 0, 2,
+                      4, 1, 2, 1, 0), nrow = 5, byrow = TRUE)
+        storage.mode(A) <- "double"
+
         factor_names <- c("Leadership", "Communication", "Innovation", "Risk_Management", "Quality")
         rownames(A) <- colnames(A) <- factor_names
 

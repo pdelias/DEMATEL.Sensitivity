@@ -35,51 +35,45 @@
 #'
 #' @export
 DEMATEL_Sensitivity <- function(A, factor_names = NULL) {
-  
-  # Input validation
-  if (!is.matrix(A)) {
-    stop("A must be a matrix")
+
+  # Every number in this object comes from spectralDEMATEL. This function
+  # arranges them into the shape the rest of the application already expects;
+  # it computes nothing. The previous version implemented the DEMATEL pipeline
+  # a second time here, and the two implementations drifted apart.
+
+  d <- spectralDEMATEL::spectral_diagnostics(A)
+  m <- spectralDEMATEL::dematel(A)
+
+  if (is.null(m)) {
+    # Inadmissible input. Return the object with empty numbers and the checks
+    # attached, so the caller can say why rather than crash.
+    obj <- list(A = A, D = NULL, T = NULL, lambda_max = NA_real_,
+                factor_names = factor_names, n = if (is.matrix(A)) nrow(A) else NA_integer_,
+                sensitivity_matrix = NULL, computation_method = NULL,
+                assumptions_check = d$checks, diagnostics = d)
+    class(obj) <- "DEMATEL_Sensitivity"
+    return(obj)
   }
-  
-  if (nrow(A) != ncol(A)) {
-    stop("A must be a square matrix")
-  }
-  
-  if (any(is.na(A)) || any(!is.finite(A))) {
-    stop("A must contain only finite numeric values")
-  }
-  
-  if (any(diag(A) != 0)) {
-    warning("Diagonal elements of A should typically be zero in DEMATEL analysis")
-  }
-  
-  # Initialize
+
   n <- nrow(A)
-  if (is.null(factor_names)) {
-    factor_names <- paste0("F", 1:n)
-  }
-  
-  if (length(factor_names) != n) {
-    stop("Length of factor_names must equal number of rows/columns in A")
-  }
-  
-  # Compute DEMATEL matrices
-  dematel_matrices <- compute_dematel_matrices(A)
-  
-  # Create object
+  if (is.null(factor_names)) factor_names <- paste0("F", seq_len(n))
+  if (length(factor_names) != n) factor_names <- paste0("F", seq_len(n))
+
   obj <- list(
-    A = A,
-    D = dematel_matrices$D,
-    T = dematel_matrices$T,
-    lambda_max = dematel_matrices$lambda_max,
-    factor_names = factor_names,
-    n = n,
+    A                  = A,
+    D                  = m$D,
+    T                  = m$T,
+    lambda_max         = d$lambda_max,
+    factor_names       = factor_names,
+    n                  = n,
     sensitivity_matrix = NULL,
-    computation_method = NULL
+    computation_method = NULL,
+    assumptions_check  = d$checks,
+    diagnostics        = d
   )
-  
+
   class(obj) <- "DEMATEL_Sensitivity"
-  return(obj)
+  obj
 }
 
 #' Compute DEMATEL Matrices
@@ -90,36 +84,12 @@ DEMATEL_Sensitivity <- function(A, factor_names = NULL) {
 #' @return List containing D, T matrices and lambda_max
 #' @keywords internal
 compute_dematel_matrices <- function(A) {
-  n <- nrow(A)
-  
-  # Normalization
-  row_sums <- rowSums(A)
-  col_sums <- colSums(A)
-  s <- max(max(row_sums), max(col_sums))
-  
-  if (s == 0) {
-    stop("Matrix A cannot have all zero elements")
-  }
-  
-  D <- A / s
-  
-  # Total relation matrix
-  I <- diag(n)
-  
-  # Check if (I - D) is invertible
-  det_val <- det(I - D)
-  if (abs(det_val) < 1e-12) {
-    stop("Matrix (I - D) is not invertible. Check your input matrix A.")
-  }
-  
-  T <- solve(I - D) - I
-  
-  # Dominant eigenvalue
-  eigenvals <- eigen(T, only.values = TRUE)$values
-  eigenvals_real <- Re(eigenvals)
-  lambda_max <- max(eigenvals_real)
-  
-  return(list(D = D, T = T, lambda_max = lambda_max))
+  # Kept only so older scripts calling it keep working. The pipeline lives in
+  # spectralDEMATEL::dematel(); nothing is computed here.
+  m <- spectralDEMATEL::dematel(A)
+  if (is.null(m)) return(NULL)
+  list(D = m$D, T = m$T,
+       lambda_max = spectralDEMATEL::spectral_diagnostics(A, checks = FALSE)$lambda_max)
 }
 
 #' Compute Numerical Sensitivity Matrix
@@ -140,7 +110,7 @@ compute_dematel_matrices <- function(A) {
 #' @examples
 #' A <- matrix(c(0, 3, 2, 2, 0, 3, 1, 2, 0), nrow = 3, byrow = TRUE)
 #' sens_obj <- DEMATEL_Sensitivity(A)
-#' sens_obj <- compute_sensitivity_numerical(sens_obj)
+#' sens_obj <- compute_sensitivity_analytical(sens_obj)
 #'
 #' @export
 # compute_sensitivity_numerical <- function(obj, epsilon = 0.01) {
@@ -316,98 +286,31 @@ compute_sensitivity_analytical <- function(obj) {
 
 #' @export
 compute_sensitivity_analytical.DEMATEL_Sensitivity <- function(obj) {
-  n <- obj$n
-  
-  # Assumption checks (same as before)
-  assumption_check <- check_theorem1_assumptions(obj)
-  if (!assumption_check$valid) {
-    warning(paste("Theorem assumptions not satisfied:", assumption_check$message,
-                  "\nFalling back to numerical method."))
-    return(compute_sensitivity_numerical(obj))
-  }
-  
-  cat("Theorem 2 assumptions satisfied. Computing full analytical sensitivity...\n")
-  
-  tryCatch({
-    # Eigendecomposition of T
-    eigen_result <- eigen(obj$T)
-    eigenvalues <- eigen_result$values
-    eigenvectors <- eigen_result$vectors
-    
-    eigenvalues_real <- Re(eigenvalues)
-    dominant_idx <- which.max(eigenvalues_real)
-    lambda_max <- Re(eigenvalues[dominant_idx])
-    
-    # Extract right eigenvector
-    u <- Re(eigenvectors[, dominant_idx])
-    
-    # Left eigenvector
-    eigen_result_T <- eigen(t(obj$T))
-    eigenvalues_T_real <- Re(eigen_result_T$values)
-    left_dominant_idx <- which.min(abs(eigenvalues_T_real - lambda_max))
-    v <- Re(eigen_result_T$vectors[, left_dominant_idx])
-    
-    # Normalize so that v^T u = 1
-    inner_product <- as.numeric(t(v) %*% u)
-    if (inner_product < 0) {
-      v <- -v
-      inner_product <- -inner_product
-    }
-    v <- v / inner_product
-    
-    # Scaling factor s
-    row_sums <- rowSums(obj$A)
-    col_sums <- colSums(obj$A)
-    max_row <- max(row_sums)
-    max_col <- max(col_sums)
-    s <- max(max_row, max_col)
-    
-    if (s == 0) stop("Scaling factor is zero")
-    
-    # Local effect (outer product form)
-    I <- diag(n)
-    S <- I + obj$T
-    left  <- as.numeric(t(v) %*% S)   # row effect
-    right <- as.numeric(S %*% u)      # column effect
-    local_matrix <- (1/s) * outer(left, right)
-    
-    # Normalization penalty term
-    C <- as.numeric(t(v) %*% (S %*% obj$A %*% S) %*% u)
-    
-    # δ_ij mask: 1 if in critical row or column, 0 otherwise
-    delta <- matrix(0, n, n)
-    if (s == max_row) {
-      critical_rows <- which(row_sums == max_row)
-      delta[critical_rows, ] <- 1
-    }
-    if (s == max_col) {
-      critical_cols <- which(col_sums == max_col)
-      delta[, critical_cols] <- 1
-    }
-    
-    normalization_matrix <- -(C / s^2) * delta
-    
-    # Full sensitivity = local effect + normalization effect
-    sensitivity_matrix <- local_matrix + normalization_matrix
-    # Enforce DEMATEL constraint: self-links are not allowed → zero diagonal
-    diag(sensitivity_matrix) <- 0
-    
-    # Add row and column names
-    rownames(sensitivity_matrix) <- obj$factor_names
-    colnames(sensitivity_matrix) <- obj$factor_names
-    
-    obj$sensitivity_matrix <- sensitivity_matrix
-    obj$computation_method <- "analytical_theorem2"
-    obj$assumptions_check <- assumption_check
-    
-    cat("\nAnalytical sensitivity computation completed successfully (Theorem 2).\n")
-    cat("Sensitivity range:", range(as.vector(sensitivity_matrix)), "\n")
-    
+
+  # The closed form lives in spectralDEMATEL::sensitivity_matrix(), where it is
+  # checked against finite differences by the package test suite. There is no
+  # numerical fallback any more: the engine returns NULL for a matrix it cannot
+  # process, and the assumption checks say why.
+
+  s <- spectralDEMATEL::sensitivity_matrix(obj$A)
+  if (is.null(s)) {
+    obj$sensitivity_matrix <- NULL
+    obj$computation_method <- "not computable"
     return(obj)
-    
-  }, error = function(e) {
-    warning(paste("Analytical method failed:", e$message, 
-                  "\nFalling back to numerical method."))
-    return(compute_sensitivity_numerical(obj))
-  })
+  }
+
+  dimnames(s$total) <- dimnames(s$local) <- dimnames(s$normalization) <-
+    list(obj$factor_names, obj$factor_names)
+
+  obj$sensitivity_matrix        <- s$total
+  obj$sensitivity_local         <- s$local
+  obj$sensitivity_normalization <- s$normalization
+  obj$computation_method        <- "analytical (spectralDEMATEL)"
+
+  # The condition number travels with the ranking. A first-order estimate with
+  # a large condition number is locally uninformative, and a ranking shown
+  # without that caveat misleads. The two ship together or neither ships.
+  obj$ev_condition <- obj$diagnostics$ev_condition
+
+  obj
 }

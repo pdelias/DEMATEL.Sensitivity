@@ -22,7 +22,7 @@
 #' @examples
 #' A <- matrix(c(0, 3, 2, 2, 0, 3, 1, 2, 0), nrow = 3, byrow = TRUE)
 #' sens_obj <- DEMATEL_Sensitivity(A)
-#' sens_obj <- compute_sensitivity_numerical(sens_obj)
+#' sens_obj <- compute_sensitivity_analytical(sens_obj)
 #' plots <- visualize_sensitivity(sens_obj)
 #'
 #' @export

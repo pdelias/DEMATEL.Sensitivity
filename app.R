@@ -12,9 +12,16 @@ library(ggrepel)
 library(viridis)
 library(reshape2)
 
+# The engine. Every spectral quantity this application shows is computed here
+# and nowhere else. Install with:
+#   install.packages("spectralDEMATEL",
+#                    repos = c("https://pdelias.r-universe.dev",
+#                              "https://cloud.r-project.org"))
+library(spectralDEMATEL)
+
 # Source all R functions with error handling
 source_files <- c(
-  "R/dematel_spectral.R",
+  "R/engine.R",
   "R/sensitivity-core.R", 
   "R/sensitivity-methods.R",
   "R/sensitivity-visualization.R",
@@ -236,6 +243,28 @@ ui <- dashboardPage(
         
         conditionalPanel(
           condition = "output.matrix_processed",
+
+          # The gate. A user learns whether their matrix is in scope before any
+          # number appears, and a failure names the factors at fault.
+          fluidRow(
+            box(
+              title = "🚦 Is this matrix in scope?",
+              status = "warning",
+              solidHeader = TRUE,
+              width = 12,
+              collapsible = TRUE,
+
+              h4(textOutput("assumption_checks_summary")),
+              p(paste("Every condition below is returned by the engine as data.",
+                      "A failure does not stop the diagnosis \u2014 published studies",
+                      "report these matrices \u2014 but it changes what the numbers mean.",
+                      "\u0022Not evaluated\u0022 is not a pass: it means a prerequisite",
+                      "failed and the check never ran."),
+                style = "color: #666; font-size: 90%;"),
+              DT::dataTableOutput("assumption_checks_table")
+            )
+          ),
+
           fluidRow(
             box(
               title = "📈 Complete Spectral Analysis Results", 
@@ -243,8 +272,17 @@ ui <- dashboardPage(
               solidHeader = TRUE,
               width = 8,
               
-              h4("System Eigenvalue Analysis"),
+              h4("Diagnostics"),
               DT::dataTableOutput("spectral_metrics_table"),
+
+              br(),
+              h4("Entry and accumulation, against prominence"),
+              p(paste("Prominence, the standard DEMATEL deliverable, adds what a",
+                      "factor dispatches to what it absorbs. The right and left",
+                      "eigenvectors separate them. Where the three rankings",
+                      "disagree is where a single blended score misleads."),
+                style = "color: #666; font-size: 90%;"),
+              DT::dataTableOutput("profile_table"),
               
               br(),
               h4("Matrix Properties"),
@@ -439,6 +477,17 @@ ui <- dashboardPage(
               
               conditionalPanel(
                 condition = "output.sensitivity_computed",
+
+                # The condition number and the ranking ship together or neither
+                # ships: a first-order estimate with a large condition number is
+                # locally uninformative, and a ranking shown without that caveat
+                # misleads.
+                div(
+                  style = "padding: 10px; margin-bottom: 12px; border-left: 4px solid #f0ad4e; background: #fcf8e3;",
+                  strong("How far these estimates can be trusted: "),
+                  textOutput("sensitivity_caveat", inline = TRUE)
+                ),
+
                 h4("Statistical Summary:"),
                 verbatimTextOutput("sensitivity_stats"),
                 
@@ -1110,71 +1159,42 @@ server <- function(input, output, session) {
         })
       }
       
-      # Compute DEMATEL matrices based on upload type
-      if (!is.null(values$upload_type) && values$upload_type == "D") {
-        # D matrix was uploaded directly, compute T from D
+      # ---------------------------------------------------------------
+      # Every spectral quantity comes from the spectralDEMATEL package.
+      # This block chooses which matrix to hand it and nothing else; see
+      # R/engine.R. Do not compute a diagnostic here.
+      # ---------------------------------------------------------------
+      if (!is.null(values$upload_type) && values$upload_type == "T") {
+        # A published total-relation matrix: the engine recovers the spectrum
+        # of D through the inverse Moebius map rather than normalising.
+        spectral_results <- run_diagnosis(values$T_matrix,
+                                          factor_names = values$factor_names,
+                                          type = "T")
+      } else if (!is.null(values$upload_type) && values$upload_type == "D") {
+        # An already-normalised matrix. Its total-relation matrix is
+        # D (I - D)^-1, which is what the engine builds from a "T" input once
+        # T itself is formed, so form T here and diagnose that.
         D <- values$D_matrix
-        n <- nrow(D)
-        I <- diag(n)
-        T_matrix <- solve(I - D) - I
-        eigenvals <- eigen(T_matrix, only.values = TRUE)$values
-        lambda_max <- max(Re(eigenvals))
-
-        dematel_matrices <- list(D = D, T = T_matrix, lambda_max = lambda_max)
-
-      } else if (!is.null(values$upload_type) && values$upload_type == "T") {
-        # T matrix was uploaded directly, D was already computed
-        D <- values$D_matrix
-        T_matrix <- values$T_matrix
-        eigenvals <- eigen(T_matrix, only.values = TRUE)$values
-        lambda_max <- max(Re(eigenvals))
-
-        dematel_matrices <- list(D = D, T = T_matrix, lambda_max = lambda_max)
-
+        T_matrix <- D %*% solve(diag(nrow(D)) - D)
+        spectral_results <- run_diagnosis(T_matrix,
+                                          factor_names = values$factor_names,
+                                          type = "T")
+        spectral_results$D_matrix <- D
       } else {
-        # A matrix was uploaded or example used, compute D and T normally
-        if (exists("compute_dematel_matrices", mode = "function")) {
-          dematel_matrices <- compute_dematel_matrices(values$matrix_A)
-        } else {
-          # Fallback computation
-          n <- nrow(values$matrix_A)
-          s <- max(max(rowSums(values$matrix_A)), max(colSums(values$matrix_A)))
-          D <- values$matrix_A / s
-          I <- diag(n)
-          T_matrix <- solve(I - D) - I
-          eigenvals <- eigen(T_matrix, only.values = TRUE)$values
-          lambda_max <- max(Re(eigenvals))
+        spectral_results <- run_diagnosis(values$matrix_A,
+                                          factor_names = values$factor_names,
+                                          type = "A")
+      }
 
-          dematel_matrices <- list(D = D, T = T_matrix, lambda_max = lambda_max)
-        }
+      if (!isTRUE(spectral_results$computable)) {
+        failed <- spectral_results$checks
+        failed <- failed[failed$verdict == "fail", ]
+        showNotification(
+          paste("Diagnostics could not be computed:",
+                if (nrow(failed)) failed$reason[1] else "the matrix is not admissible."),
+          type = "warning", duration = 12)
       }
-      
-      # ENHANCED: Perform complete spectral analysis
-      if (exists("dematel_spectral_analysis", mode = "function")) {
-        spectral_results <- dematel_spectral_analysis(
-          D = dematel_matrices$D, 
-          T = dematel_matrices$T, 
-          case_name = "Current Analysis",
-          return_eigenvalues = TRUE,
-          verbose = FALSE
-        )
-      } else {
-        # Fallback if spectral analysis function not available
-        eigenvals <- eigen(dematel_matrices$T, only.values = TRUE)$values
-        spectral_results <- list(
-          lambda_max = dematel_matrices$lambda_max,
-          spectral_radius = max(abs(eigenvals)),
-          case_name = "Current Analysis"
-        )
-      }
-      
-      # Add matrix data to spectral results
-      spectral_results$D_matrix <- dematel_matrices$D
-      spectral_results$T_matrix <- dematel_matrices$T
-      spectral_results$A_matrix <- values$matrix_A
-      spectral_results$factor_names <- values$factor_names
-      spectral_results$n <- nrow(values$matrix_A)
-      
+
       values$spectral_results <- spectral_results
       values$matrix_processed <- TRUE
       
@@ -1320,182 +1340,92 @@ server <- function(input, output, session) {
   })
   
   # ENHANCED Spectral analysis outputs
+  # ---------------------------------------------------------------
+  # Diagnostics. Every row comes from spectralDEMATEL via R/engine.R.
+  #
+  # Five quantities the previous version showed are gone rather than
+  # corrected: the spectral radius, the minimum eigenvalue, a convergence
+  # rate, a concentration ratio and an eigenvector range. None was part of
+  # any definition. Two more were wrong: the second eigenvalue was taken by
+  # real part rather than by modulus, which understates mode dominance, and
+  # "condition number" named lambda_max/lambda_min, which is not the
+  # eigenvalue condition number that governs the sensitivity estimates.
+  # ---------------------------------------------------------------
   output$spectral_metrics_table <- DT::renderDataTable({
     req(values$spectral_results)
-    
-    # Create comprehensive metrics table
-    metrics_data <- data.frame(
-      Metric = character(),
-      Value = character(),
-      Description = character(),
-      stringsAsFactors = FALSE
-    )
-    
-    # Add all available metrics from spectral analysis
-    if (!is.null(values$spectral_results$lambda_max)) {
-      metrics_data <- rbind(metrics_data, data.frame(
-        Metric = "Dominant Eigenvalue (λmax)",
-        Value = as.character(round(values$spectral_results$lambda_max, 6)),
-        Description = "Largest eigenvalue of T matrix"
-      ))
-    }
-    
-    if (!is.null(values$spectral_results$lambda_2)) {
-      metrics_data <- rbind(metrics_data, data.frame(
-        Metric = "Second Eigenvalue (λ2)",
-        Value = as.character(round(values$spectral_results$lambda_2, 6)),
-        Description = "Second largest eigenvalue"
-      ))
-    }
-    
-    if (!is.null(values$spectral_results$lambda_min)) {
-      metrics_data <- rbind(metrics_data, data.frame(
-        Metric = "Minimum Eigenvalue (λmin)",
-        Value = as.character(round(values$spectral_results$lambda_min, 6)),
-        Description = "Smallest eigenvalue"
-      ))
-    }
-    
-    if (!is.null(values$spectral_results$spectral_radius)) {
-      metrics_data <- rbind(metrics_data, data.frame(
-        Metric = "Spectral Radius",
-        Value = as.character(round(values$spectral_results$spectral_radius, 6)),
-        Description = "Maximum absolute eigenvalue"
-      ))
-    }
-    
-    if (!is.null(values$spectral_results$condition_number)) {
-      metrics_data <- rbind(metrics_data, data.frame(
-        Metric = "Condition Number",
-        Value = as.character(round(values$spectral_results$condition_number, 2)),
-        Description = "Ratio λmax/λmin"
-      ))
-    }
-    
-    if (!is.null(values$spectral_results$amplification_factor)) {
-      metrics_data <- rbind(metrics_data, data.frame(
-        Metric = "Amplification Factor",
-        Value = as.character(round(values$spectral_results$amplification_factor, 4)),
-        Description = "System amplification potential"
-      ))
-    }
-    
-    if (!is.null(values$spectral_results$convergence_rate)) {
-      metrics_data <- rbind(metrics_data, data.frame(
-        Metric = "Convergence Rate",
-        Value = as.character(round(values$spectral_results$convergence_rate, 4)),
-        Description = "System convergence speed"
-      ))
-    }
-    
-    if (!is.null(values$spectral_results$concentration_ratio)) {
-      metrics_data <- rbind(metrics_data, data.frame(
-        Metric = "Concentration Ratio",
-        Value = as.character(round(values$spectral_results$concentration_ratio, 4)),
-        Description = "Eigenvalue concentration"
-      ))
-    }
-    
-    if (!is.null(values$spectral_results$eigenvector_sd)) {
-      metrics_data <- rbind(metrics_data, data.frame(
-        Metric = "Eigenvector Std Dev",
-        Value = as.character(round(values$spectral_results$eigenvector_sd, 4)),
-        Description = "Dominant eigenvector variability"
-      ))
-    }
-    
-    if (!is.null(values$spectral_results$eigenvector_range)) {
-      metrics_data <- rbind(metrics_data, data.frame(
-        Metric = "Eigenvector Range",
-        Value = as.character(round(values$spectral_results$eigenvector_range, 4)),
-        Description = "Dominant eigenvector range"
-      ))
-    }
-    
-    # Add diagonalizability information
-    if (!is.null(values$spectral_results$is_diagonalizable)) {
-      metrics_data <- rbind(metrics_data, data.frame(
-        Metric = "Is Diagonalizable",
-        Value = ifelse(values$spectral_results$is_diagonalizable, "Yes", "No"),
-        Description = "Matrix diagonalizability status"
-      ))
-    }
-    
     DT::datatable(
-      metrics_data,
-      options = list(
-        pageLength = 15,
-        scrollX = TRUE,
-        dom = 'ft'
-      ),
+      diagnostics_table(values$spectral_results),
+      options = list(pageLength = 15, scrollX = TRUE, dom = 't'),
       rownames = FALSE
     )
   })
-  
+
   output$primary_metrics_table <- renderTable({
     req(values$spectral_results)
-    
-    primary_data <- data.frame(
-      Metric = character(),
-      Value = character(),
+    res <- values$spectral_results
+    if (!isTRUE(res$computable)) {
+      return(data.frame(Metric = "Not computable", Value = "-"))
+    }
+    data.frame(
+      Metric = c("Coupling (μₘₐₓ)", "Multiplier", "λₘₐₓ", "Mode dominance"),
+      Value = c(formatC(res$mu_max, format = "f", digits = 4),
+                formatC(res$multiplier, format = "f", digits = 2),
+                formatC(res$lambda_max, format = "f", digits = 4),
+                formatC(res$dominance, format = "f", digits = 4)),
       stringsAsFactors = FALSE
     )
-    
-    if (!is.null(values$spectral_results$lambda_max)) {
-      primary_data <- rbind(primary_data, data.frame(
-        Metric = "λmax",
-        Value = as.character(round(values$spectral_results$lambda_max, 6))
-      ))
-    }
-    
-    if (!is.null(values$spectral_results$spectral_radius)) {
-      primary_data <- rbind(primary_data, data.frame(
-        Metric = "Spectral Radius",
-        Value = as.character(round(values$spectral_results$spectral_radius, 6))
-      ))
-    }
-    
-    if (!is.null(values$spectral_results$condition_number)) {
-      primary_data <- rbind(primary_data, data.frame(
-        Metric = "Condition Number",
-        Value = as.character(round(values$spectral_results$condition_number, 2))
-      ))
-    }
-    
-    return(primary_data)
   }, striped = TRUE, hover = TRUE, bordered = TRUE)
-  
+
   output$system_characteristics_table <- renderTable({
     req(values$spectral_results)
-    
-    char_data <- data.frame(
-      Property = character(),
-      Value = character(),
+    res <- values$spectral_results
+    if (!isTRUE(res$computable)) {
+      return(data.frame(Property = "Matrix size",
+                        Value = paste0(res$n, " × ", res$n)))
+    }
+    data.frame(
+      Property = c("Matrix size", "Indirect effects dominant",
+                   "Hierarchy, SD reading", "Engine version"),
+      Value = c(paste0(res$n, " × ", res$n),
+                if (isTRUE(res$indirect_dominant)) "Yes" else "No",
+                paste0(formatC(res$hierarchy_sd, format = "f", digits = 4),
+                       if (res$hierarchy_sd > 0.10) "  (concentrated)" else "  (diffuse)"),
+                res$engine_version),
       stringsAsFactors = FALSE
     )
-    
-    char_data <- rbind(char_data, data.frame(
-      Property = "Matrix Size",
-      Value = paste0(values$spectral_results$n, " × ", values$spectral_results$n)
-    ))
-    
-    if (!is.null(values$spectral_results$is_diagonalizable)) {
-      char_data <- rbind(char_data, data.frame(
-        Property = "Diagonalizable",
-        Value = ifelse(values$spectral_results$is_diagonalizable, "Yes", "No")
-      ))
-    }
-    
-    if (!is.null(values$spectral_results$amplification_factor)) {
-      char_data <- rbind(char_data, data.frame(
-        Property = "Amplification",
-        Value = as.character(round(values$spectral_results$amplification_factor, 4))
-      ))
-    }
-    
-    return(char_data)
   }, striped = TRUE, hover = TRUE, bordered = TRUE)
-  
+
+  # Assumption checks, returned by the engine as data and rendered here.
+  output$assumption_checks_summary <- renderText({
+    req(values$spectral_results)
+    checks_summary(values$spectral_results)
+  })
+
+  output$assumption_checks_table <- DT::renderDataTable({
+    req(values$spectral_results)
+    DT::datatable(
+      checks_table(values$spectral_results),
+      options = list(pageLength = 12, scrollX = TRUE, dom = 't',
+                     columnDefs = list(list(width = "45%", targets = 3))),
+      rownames = FALSE
+    )
+  })
+
+  # Entry and accumulation as two rankings, with prominence beside them so a
+  # user can see where the standard deliverable disagrees with both.
+  output$profile_table <- DT::renderDataTable({
+    req(values$spectral_results)
+    tbl <- profile_table(values$spectral_results)
+    validate(need(!is.null(tbl), "Not available for this matrix."))
+    DT::datatable(tbl, options = list(pageLength = 15, scrollX = TRUE, dom = 'ft'),
+                  rownames = FALSE)
+  })
+
+  output$sensitivity_caveat <- renderText({
+    req(values$spectral_results)
+    sensitivity_caveat(values$spectral_results)
+  })
+
   output$matrix_properties <- renderText({
     req(values$spectral_results)
     
@@ -1527,130 +1457,49 @@ server <- function(input, output, session) {
   
   output$eigenvalue_details <- renderText({
     req(values$spectral_results)
-    
-    details_text <- ""
-    
-    if (!is.null(values$spectral_results$lambda_max)) {
-      details_text <- paste(details_text, "Dominant eigenvalue (λmax):", 
-                            round(values$spectral_results$lambda_max, 6), "\n")
-    }
-    
-    if (!is.null(values$spectral_results$lambda_2)) {
-      details_text <- paste(details_text, "Second largest eigenvalue (λ2):", 
-                            round(values$spectral_results$lambda_2, 6), "\n")
-      
-      if (!is.null(values$spectral_results$lambda_max)) {
-        gap <- values$spectral_results$lambda_max - values$spectral_results$lambda_2
-        details_text <- paste(details_text, "Eigenvalue gap (λmax - λ2):", 
-                              round(gap, 6), "\n")
-      }
-    }
-    
-    if (!is.null(values$spectral_results$lambda_min)) {
-      details_text <- paste(details_text, "Smallest eigenvalue (λmin):", 
-                            round(values$spectral_results$lambda_min, 6), "\n")
-    }
-    
-    if (!is.null(values$spectral_results$all_eigenvalues)) {
-      details_text <- paste(details_text, "\nAll eigenvalues (real parts):\n")
-      eigenvals <- round(values$spectral_results$all_eigenvalues, 4)
-      details_text <- paste(details_text, paste(eigenvals, collapse = ", "), "\n")
-    }
-    
-    return(details_text)
+    res <- values$spectral_results
+    if (!isTRUE(res$computable)) return("Not computable; see the assumption checks.")
+    paste0(
+      "Dominant eigenvalue (\u03bb\u2098\u2090\u2093): ", round(res$lambda_max, 6), "\n",
+      "Coupling (\u03bc\u2098\u2090\u2093):            ", round(res$mu_max, 6), "\n",
+      "Total-effect multiplier:      ", round(res$multiplier, 4),
+      "   (= 1/(1-\u03bc) = 1+\u03bb)\n",
+      "Mode dominance:               ", round(res$dominance, 6),
+      "   (|\u03bb\u2082|/\u03bb\u2098\u2090\u2093, largest MODULUS below the dominant one)\n",
+      if (res$dominance < 0.10)
+        "\nOne propagation mode governs the system; a single ranking of factors is defensible.\n"
+      else
+        "\nA second mode competes with the first, so a single ranking hides a disagreement.\n"
+    )
   })
   
   output$system_dynamics <- renderText({
     req(values$spectral_results)
-    
-    dynamics_text <- ""
-    
-    if (!is.null(values$spectral_results$convergence_rate)) {
-      dynamics_text <- paste(dynamics_text, "Convergence rate:", 
-                             round(values$spectral_results$convergence_rate, 6), "\n")
-    }
-    
-    if (!is.null(values$spectral_results$concentration_ratio)) {
-      dynamics_text <- paste(dynamics_text, "Concentration ratio:", 
-                             round(values$spectral_results$concentration_ratio, 4), "\n")
-    }
-    
-    if (!is.null(values$spectral_results$eigenvector_sd)) {
-      dynamics_text <- paste(dynamics_text, "Dominant eigenvector std dev:", 
-                             round(values$spectral_results$eigenvector_sd, 4), "\n")
-    }
-    
-    if (!is.null(values$spectral_results$eigenvector_range)) {
-      dynamics_text <- paste(dynamics_text, "Dominant eigenvector range:", 
-                             round(values$spectral_results$eigenvector_range, 4), "\n")
-    }
-    
-    if (!is.null(values$spectral_results$dominant_eigenvector)) {
-      dynamics_text <- paste(dynamics_text, "\nDominant eigenvector components:\n")
-      eigenvec <- round(values$spectral_results$dominant_eigenvector, 4)
-      for (i in 1:length(eigenvec)) {
-        dynamics_text <- paste(dynamics_text, values$factor_names[i], ":", eigenvec[i], "\n")
-      }
-    }
-    
-    return(dynamics_text)
+    res <- values$spectral_results
+    if (!isTRUE(res$computable)) return("Not computable; see the assumption checks.")
+    paste0(
+      "HIERARCHY \u2014 three readings, and they do NOT run the same way:\n",
+      "  Standard deviation   ", formatC(res$hierarchy_sd, format = "f", digits = 4),
+      "   HIGH = influence enters at a few factors\n",
+      "  Gini (size-free)     ", formatC(res$hierarchy_gini, format = "f", digits = 4),
+      "   HIGH = influence enters at a few factors\n",
+      "  Participation ratio  ", formatC(res$hierarchy_pr, format = "f", digits = 4),
+      "   LOW  = influence enters at a few factors\n\n",
+      "The standard-deviation reading is the one behind published corpus results.\n",
+      "It is not size-free; the Gini reading is.\n\n",
+      "ENTRY PROFILE (right eigenvector, where to apply pressure):\n",
+      paste(sprintf("  %-24s %.4f", res$factor_names, res$entry_points), collapse = "\n"),
+      "\n\nACCUMULATION PROFILE (left eigenvector, where effects land):\n",
+      paste(sprintf("  %-24s %.4f", res$factor_names, res$accumulation), collapse = "\n"),
+      "\n"
+    )
   })
   
   # =============================================================
   # NEW: Add matrix properties check output
   output$matrix_properties_check <- renderText({
     req(values$spectral_results)
-    
-    if (!is.null(values$spectral_results$D_matrix) && !is.null(values$spectral_results$T_matrix)) {
-      if (exists("check_dematel_matrix_properties", mode = "function")) {
-        
-        properties <- check_dematel_matrix_properties(
-          values$spectral_results$D_matrix, 
-          values$spectral_results$T_matrix
-        )
-        
-        result_text <- "MATRIX PROPERTIES VERIFICATION:\n"
-        result_text <- paste(result_text, paste(rep("=", 40), collapse = ""), "\n\n")
-        
-        # Main results
-        result_text <- paste(result_text, "DIAGONALIZABILITY:\n")
-        result_text <- paste(result_text, "  Status:", ifelse(properties$is_diagonalizable, "✅ PASSED", "❌ FAILED"), "\n")
-        result_text <- paste(result_text, "  Eigenvector matrix rank:", properties$eigenvector_rank, "/", properties$expected_rank, "\n\n")
-        
-        result_text <- paste(result_text, "IRREDUCIBILITY:\n")  
-        result_text <- paste(result_text, "  Status:", ifelse(properties$is_irreducible, "✅ PASSED", "❌ FAILED"), "\n")
-        result_text <- paste(result_text, "  Minimum power matrix entry:", round(properties$min_power_entry, 6), "\n")
-        if (properties$zero_entries_in_power > 0) {
-          result_text <- paste(result_text, "  Zero entries in power matrix:", properties$zero_entries_in_power, "\n")
-        }
-        result_text <- paste(result_text, "\n")
-        
-        result_text <- paste(result_text, "EIGENVALUE PROPERTIES:\n")
-        result_text <- paste(result_text, "  Dominant eigenvalue:", round(properties$dominant_eigenvalue, 6), "\n")
-        result_text <- paste(result_text, "  Multiplicity:", properties$dominant_multiplicity, "\n")
-        result_text <- paste(result_text, "  Simple dominant:", ifelse(properties$is_simple_dominant, "✅ YES", "❌ NO"), "\n\n")
-        
-        result_text <- paste(result_text, "OVERALL STATUS:\n")
-        result_text <- paste(result_text, "  All conditions met:", ifelse(properties$all_conditions_met, "✅ PASSED", "❌ FAILED"), "\n\n")
-        
-        result_text <- paste(result_text, "INTERPRETATION:\n")
-        for (msg in properties$messages) {
-          result_text <- paste(result_text, "  ", msg, "\n")
-        }
-        
-        if (!properties$all_conditions_met) {
-          result_text <- paste(result_text, "\n⚠️ Some theoretical conditions are not met.\n")
-          result_text <- paste(result_text, "   Results should be interpreted with caution.\n")
-        }
-        
-        return(result_text)
-        
-      } else {
-        return("Matrix properties checking function not available")
-      }
-    } else {
-      return("Matrix data not available for property checking")
-    }
+    checks_text(values$spectral_results)
   })
   # END NEW
   # =============================================================
@@ -2106,19 +1955,7 @@ server <- function(input, output, session) {
         
         # Get matrix properties if available
         properties_summary <- ""
-        if (exists("check_dematel_matrix_properties", mode = "function")) {
-          properties <- check_dematel_matrix_properties(
-            values$spectral_results$D_matrix, 
-            values$spectral_results$T_matrix
-          )
-          properties_summary <- paste(
-            "\nMATRIX VALIDITY:\n",
-            "- Diagonalizable:", ifelse(properties$is_diagonalizable, "✅ YES", "❌ NO"), "\n",
-            "- Irreducible:", ifelse(properties$is_irreducible, "✅ YES", "❌ NO"), "\n",
-            "- Simple dominant eigenvalue:", ifelse(properties$is_simple_dominant, "✅ YES", "❌ NO"), "\n",
-            "- Overall validity:", ifelse(properties$all_conditions_met, "✅ VALID", "⚠️ CHECK REQUIRED"), "\n"
-          )
-        }
+        properties_summary <- checks_text(values$spectral_results)
         
         summary_text <- paste(
           "EXECUTIVE SUMMARY - DEMATEL SENSITIVITY ANALYSIS\n",
@@ -2132,17 +1969,9 @@ server <- function(input, output, session) {
           
           properties_summary,
           
-          "\nSPECTRAL ANALYSIS RESULTS:\n",
-          "- Dominant Eigenvalue (λmax):", round(values$spectral_results$lambda_max, 6), "\n",
-          "- Spectral Radius:", round(values$spectral_results$spectral_radius %||% NA, 6), "\n",
-          "- Condition Number:", round(values$spectral_results$condition_number %||% NA, 2), "\n"
+          "\n", diagnostics_text(values$spectral_results)
         )
         
-        if (!is.null(values$spectral_results$amplification_factor)) {
-          summary_text <- paste(summary_text,
-                                "- Amplification Factor:", round(values$spectral_results$amplification_factor, 4), "\n"
-          )
-        }
         
         summary_text <- paste(summary_text,
                               "\nSENSITIVITY ANALYSIS RESULTS:\n",
@@ -2221,45 +2050,8 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       if (!is.null(values$spectral_results)) {
-        # Create comprehensive spectral analysis data frame
-        spectral_df <- data.frame(
-          Metric = character(),
-          Value = numeric(),
-          stringsAsFactors = FALSE
-        )
-        
-        # Add all available metrics
-        if (!is.null(values$spectral_results$lambda_max)) {
-          spectral_df <- rbind(spectral_df, data.frame(Metric = "Dominant_Eigenvalue", Value = values$spectral_results$lambda_max))
-        }
-        if (!is.null(values$spectral_results$lambda_2)) {
-          spectral_df <- rbind(spectral_df, data.frame(Metric = "Second_Eigenvalue", Value = values$spectral_results$lambda_2))
-        }
-        if (!is.null(values$spectral_results$lambda_min)) {
-          spectral_df <- rbind(spectral_df, data.frame(Metric = "Minimum_Eigenvalue", Value = values$spectral_results$lambda_min))
-        }
-        if (!is.null(values$spectral_results$spectral_radius)) {
-          spectral_df <- rbind(spectral_df, data.frame(Metric = "Spectral_Radius", Value = values$spectral_results$spectral_radius))
-        }
-        if (!is.null(values$spectral_results$condition_number)) {
-          spectral_df <- rbind(spectral_df, data.frame(Metric = "Condition_Number", Value = values$spectral_results$condition_number))
-        }
-        if (!is.null(values$spectral_results$amplification_factor)) {
-          spectral_df <- rbind(spectral_df, data.frame(Metric = "Amplification_Factor", Value = values$spectral_results$amplification_factor))
-        }
-        if (!is.null(values$spectral_results$convergence_rate)) {
-          spectral_df <- rbind(spectral_df, data.frame(Metric = "Convergence_Rate", Value = values$spectral_results$convergence_rate))
-        }
-        if (!is.null(values$spectral_results$concentration_ratio)) {
-          spectral_df <- rbind(spectral_df, data.frame(Metric = "Concentration_Ratio", Value = values$spectral_results$concentration_ratio))
-        }
-        if (!is.null(values$spectral_results$eigenvector_sd)) {
-          spectral_df <- rbind(spectral_df, data.frame(Metric = "Eigenvector_Std_Dev", Value = values$spectral_results$eigenvector_sd))
-        }
-        if (!is.null(values$spectral_results$eigenvector_range)) {
-          spectral_df <- rbind(spectral_df, data.frame(Metric = "Eigenvector_Range", Value = values$spectral_results$eigenvector_range))
-        }
-        
+        spectral_df <- export_frame(values$spectral_results)
+
         write.csv(spectral_df, file, row.names = FALSE)
       }
     }
@@ -2319,28 +2111,8 @@ server <- function(input, output, session) {
         )
         
         # Add matrix properties if available
-        if (exists("check_dematel_matrix_properties", mode = "function")) {
-          properties <- check_dematel_matrix_properties(
-            values$spectral_results$D_matrix, 
-            values$spectral_results$T_matrix
-          )
-          
-          report_content <- paste(report_content,
-                                  "MATHEMATICAL VALIDITY ASSESSMENT:\n",
-                                  paste(rep("-", 35), collapse = ""), "\n",
-                                  "Matrix T Diagonalizability:", ifelse(properties$is_diagonalizable, "PASSED", "FAILED"), "\n",
-                                  "  - Eigenvector matrix rank:", properties$eigenvector_rank, "out of", properties$expected_rank, "\n",
-                                  "Matrix D Irreducibility:", ifelse(properties$is_irreducible, "PASSED", "FAILED"), 
-                                  "Matrix D Irreducibility:", ifelse(properties$is_irreducible, "PASSED", "FAILED"), "\n",
-                                  "  - Minimum power matrix entry:", round(properties$min_power_entry, 8), "\n",
-                                  "  - Zero entries in connectivity test:", properties$zero_entries_in_power, "\n",
-                                  "Dominant Eigenvalue Properties:\n",
-                                  "  - Value:", round(properties$dominant_eigenvalue, 8), "\n",
-                                  "  - Multiplicity:", properties$dominant_multiplicity, "(should be 1)\n",
-                                  "  - Is Simple:", ifelse(properties$is_simple_dominant, "YES", "NO"), "\n",
-                                  "Overall Theoretical Validity:", ifelse(properties$all_conditions_met, "PASSED", "CAUTION REQUIRED"), "\n\n"
-          )
-        }
+        report_content <- paste(report_content,
+                                checks_text(values$spectral_results), "\n")
         
         report_content <- paste(report_content,
                                 "SPECTRAL ANALYSIS RESULTS:\n",
@@ -2348,24 +2120,8 @@ server <- function(input, output, session) {
                                 "Dominant Eigenvalue (λmax):", round(values$spectral_results$lambda_max, 8), "\n"
         )
         
-        if (!is.null(values$spectral_results$lambda_2)) {
-          report_content <- paste(report_content,
-                                  "Second Largest Eigenvalue:", round(values$spectral_results$lambda_2, 8), "\n",
-                                  "Eigenvalue Gap (λmax - λ2):", round(values$spectral_results$lambda_max - values$spectral_results$lambda_2, 8), "\n"
-          )
-        }
         
-        if (!is.null(values$spectral_results$spectral_radius)) {
-          report_content <- paste(report_content,
-                                  "Spectral Radius:", round(values$spectral_results$spectral_radius, 8), "\n"
-          )
-        }
         
-        if (!is.null(values$spectral_results$condition_number)) {
-          report_content <- paste(report_content,
-                                  "Condition Number:", round(values$spectral_results$condition_number, 4), "\n"
-          )
-        }
         
         report_content <- paste(report_content,
                                 "\nSENSITIVITY ANALYSIS RESULTS:\n",
@@ -2493,21 +2249,13 @@ server <- function(input, output, session) {
         critical_90 <- identify_critical_relationships(values$sensitivity_results, 90)
         critical_95 <- identify_critical_relationships(values$sensitivity_results, 95)
         
-        # Get matrix properties if available
-        is_diagonalizable <- NA
-        is_irreducible <- NA
-        overall_validity <- "Unknown"
-        
-        if (exists("check_dematel_matrix_properties", mode = "function")) {
-          properties <- check_dematel_matrix_properties(
-            values$spectral_results$D_matrix, 
-            values$spectral_results$T_matrix
-          )
-          is_diagonalizable <- properties$is_diagonalizable
-          is_irreducible <- properties$is_irreducible
-          overall_validity <- ifelse(properties$all_conditions_met, "Valid", "Check Required")
-        }
-        
+        # Assumption verdicts, from the engine's returned checks
+        ck <- values$spectral_results$checks
+        verdict_of <- function(id) ck$verdict[ck$check == id]
+        n_failed <- sum(ck$verdict == "fail")
+        overall_validity <- if (n_failed == 0) "All assumptions met"
+                            else paste(n_failed, "assumption(s) not met")
+
         summary_df <- data.frame(
           # Basic Information
           Analysis_Date = as.character(Sys.Date()),
@@ -2515,17 +2263,25 @@ server <- function(input, output, session) {
           Matrix_Size = paste0(values$spectral_results$n, "x", values$spectral_results$n),
           Factor_Names = paste(values$factor_names, collapse = "; "),
           
-          # Matrix Properties
-          Is_Diagonalizable = is_diagonalizable,
-          Is_Irreducible = is_irreducible,
+          # Assumption checks, so the verdicts travel with the numbers
+          Strong_Connectivity = verdict_of("strong_connectivity"),
+          Totals_Vary = verdict_of("totals_vary"),
+          Zero_Diagonal = verdict_of("zero_diagonal"),
+          Coupling_Margin = verdict_of("coupling_margin"),
+          Sensitivity_Conditioning = verdict_of("sensitivity_conditioning"),
           Overall_Validity = overall_validity,
           
-          # Spectral Analysis
+          # Spectral diagnostics, from spectralDEMATEL
           Lambda_Max = values$spectral_results$lambda_max,
-          Lambda_2 = ifelse(is.null(values$spectral_results$lambda_2), NA, values$spectral_results$lambda_2),
-          Spectral_Radius = ifelse(is.null(values$spectral_results$spectral_radius), NA, values$spectral_results$spectral_radius),
-          Condition_Number = ifelse(is.null(values$spectral_results$condition_number), NA, values$spectral_results$condition_number),
-          Amplification_Factor = ifelse(is.null(values$spectral_results$amplification_factor), NA, values$spectral_results$amplification_factor),
+          Coupling_Mu_Max = values$spectral_results$mu_max,
+          Multiplier = values$spectral_results$multiplier,
+          Indirect_Dominant = values$spectral_results$indirect_dominant,
+          Mode_Dominance = values$spectral_results$dominance,
+          Hierarchy_SD_high_is_concentrated = values$spectral_results$hierarchy_sd,
+          Hierarchy_Gini_high_is_concentrated = values$spectral_results$hierarchy_gini,
+          Hierarchy_PR_low_is_concentrated = values$spectral_results$hierarchy_pr,
+          Eigenvalue_Condition_Number = values$spectral_results$ev_condition,
+          Engine_Version = values$spectral_results$engine_version,
           
           # Sensitivity Statistics
           Sensitivity_Method = ifelse(is.null(values$sensitivity_results$computation_method), "Unknown", values$sensitivity_results$computation_method),

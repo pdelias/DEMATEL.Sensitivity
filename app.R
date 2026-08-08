@@ -59,13 +59,27 @@ ui <- dashboardPage(
     width = 300,
     sidebarMenu(
       id = "sidebar",
-      menuItem("📊 Data Input", tabName = "input", icon = icon("upload")),
-      menuItem("📈 Spectral Analysis", tabName = "spectral", icon = icon("chart-line")),
-      menuItem("🔍 Sensitivity Analysis", tabName = "sensitivity", icon = icon("search")),
-      menuItem("🎯 Critical Relationships", tabName = "critical", icon = icon("bullseye")),
-      menuItem("💡 Intervention Analysis", tabName = "intervention", icon = icon("lightbulb")),
-      menuItem("📋 Reporting", tabName = "report", icon = icon("file-alt")),
-      menuItem("❓ Help & Examples", tabName = "help", icon = icon("question-circle"))
+      menuItem(HTML(paste0("Your matrix",
+                           "<span class='menu-sub'>Load it and check it</span>")),
+               tabName = "input", icon = icon("table")),
+      menuItem(HTML(paste0("The diagnosis",
+                           "<span class='menu-sub'>What kind of system is this?</span>")),
+               tabName = "spectral", icon = icon("compass")),
+      menuItem(HTML(paste0("Where to act",
+                           "<span class='menu-sub'>Which link moves it most?</span>")),
+               tabName = "sensitivity", icon = icon("bullseye")),
+      menuItem(HTML(paste0("Strongest links",
+                           "<span class='menu-sub'>The relationships that matter</span>")),
+               tabName = "critical", icon = icon("link")),
+      menuItem(HTML(paste0("Trying a change",
+                           "<span class='menu-sub'>What would an intervention do?</span>")),
+               tabName = "intervention", icon = icon("lightbulb")),
+      menuItem(HTML(paste0("Show your work",
+                           "<span class='menu-sub'>Export and cite</span>")),
+               tabName = "report", icon = icon("file-lines")),
+      menuItem(HTML(paste0("Help &amp; glossary",
+                           "<span class='menu-sub'>What do these words mean?</span>")),
+               tabName = "help", icon = icon("circle-question"))
     )
   ),
   
@@ -81,12 +95,27 @@ ui <- dashboardPage(
         tabName = "input",
         fluidRow(
           box(
-            title = "📁 Upload Your DEMATEL Matrix", 
+            title = "Upload Your DEMATEL Matrix", 
             status = "primary", 
             solidHeader = TRUE,
             width = 4,
             
-            h4("Step 1: Choose Your Input Method"),
+            div(class = "guide",
+              div(class = "guide-step",
+                  span(class = "n", "1"), tags$b("Load a matrix"),
+                  tags$p(paste("A CSV of direct influence ratings, one row and",
+                               "column per factor \u2014 or try the example."))),
+              div(class = "guide-step",
+                  span(class = "n", "2"), tags$b("Read the diagnosis"),
+                  tags$p(paste("What kind of system it is, how firmly, and",
+                               "whether the matrix is in scope at all."))),
+              div(class = "guide-step",
+                  span(class = "n", "3"), tags$b("Find where to act"),
+                  tags$p(paste("Which relationship moves the system most, and",
+                               "how far that estimate can be trusted.")))
+            ),
+
+            h4("Choose your input"),
             
             radioButtons(
               "input_method",
@@ -148,7 +177,7 @@ ui <- dashboardPage(
 
             conditionalPanel(
               condition = "input.input_method == 'example'",
-              h4("📋 Using Example Dataset"),
+              h4("Using the example"),
               p("A 5×5 example matrix will be loaded automatically.",
                 style = "color: #666; font-style: italic;")
             ),
@@ -168,7 +197,7 @@ ui <- dashboardPage(
               helpText("Leave empty to use default names (F1, F2, F3, ...)")
             ),
             
-            h4("Step 3: Process Matrix"),
+            h4("Ready when you are"),
             actionButton(
               "process_matrix",
               "Process Matrix & Start Analysis",
@@ -178,7 +207,7 @@ ui <- dashboardPage(
           ),
           
           box(
-            title = "📊 Matrix Preview", 
+            title = "Matrix Preview", 
             status = "info", 
             solidHeader = TRUE,
             width = 8,
@@ -208,7 +237,7 @@ ui <- dashboardPage(
           conditionalPanel(
             condition = "output.matrix_processed",
             box(
-              title = "✅ Processing Status", 
+              title = "Processing Status", 
               status = "success", 
               solidHeader = TRUE,
               width = 12,
@@ -227,7 +256,7 @@ ui <- dashboardPage(
           condition = "!output.matrix_processed",
           fluidRow(
             box(
-              title = "⚠️ Data Required", 
+              title = "Data Required", 
               status = "warning", 
               solidHeader = TRUE,
               width = 12,
@@ -246,37 +275,20 @@ ui <- dashboardPage(
         conditionalPanel(
           condition = "output.matrix_processed",
 
-          # The gate. A user learns whether their matrix is in scope before any
-          # number appears, and a failure names the factors at fault.
           fluidRow(
-            box(
-              title = "🚦 Is this matrix in scope?",
-              status = "warning",
-              solidHeader = TRUE,
-              width = 12,
-              collapsible = TRUE,
-
-              h4(textOutput("assumption_checks_summary")),
-              p(paste("Every condition below is returned by the engine as data.",
-                      "A failure does not stop the diagnosis \u2014 published studies",
-                      "report these matrices \u2014 but it changes what the numbers mean.",
-                      "\u0022Not evaluated\u0022 is not a pass: it means a prerequisite",
-                      "failed and the check never ran."),
-                style = "color: #666; font-size: 90%;"),
-              DT::dataTableOutput("assumption_checks_table")
-            )
+            column(12, uiOutput("plain_verdict"), br())
           ),
 
           fluidRow(
             box(
-              title = "🗺️ What kind of system is this?",
+              title = "Where this system sits",
               status = "primary",
               solidHeader = TRUE,
               width = 7,
               plotOutput("structure_map", height = "380px")
             ),
             box(
-              title = "🧭 The type, and how firmly it is held",
+              title = "The type, and how firmly it is held",
               status = "primary",
               solidHeader = TRUE,
               width = 5,
@@ -284,24 +296,26 @@ ui <- dashboardPage(
               h3(textOutput("type_headline"), style = "margin-top: 0;"),
               p(textOutput("type_confidence"), style = "color: #444;"),
 
-              div(style = paste("padding: 10px; margin: 12px 0;",
-                                "border-left: 4px solid #337ab7; background: #f4f8fb;"),
+              div(class = "note note-neutral",
+                  style = "border-left-color: #295073; background: #eef4f8;",
                   strong("The intervention logic this structure favours"),
                   p(textOutput("type_logic"), style = "margin: 6px 0 0 0;")),
 
-              div(style = "font-size: 88%; color: #8a6d3b; background: #fcf8e3; padding: 8px;",
+              div(class = "caveat",
                   strong("This is a hypothesis, not a validated result. "),
                   textOutput("type_caveat", inline = TRUE)),
 
               br(),
-              verbatimTextOutput("type_detail")
+              tags$details(class = "maths",
+                tags$summary("Margins, stability and the corpus comparison"),
+                div(class = "details-body", uiOutput("type_detail")))
             )
           ),
 
           fluidRow(
             box(
-              title = "🎲 How much should I trust that type?",
-              status = "warning",
+              title = "How much should I trust that type?",
+              status = "info",
               solidHeader = TRUE,
               width = 12,
               collapsible = TRUE,
@@ -333,15 +347,44 @@ ui <- dashboardPage(
             )
           ),
 
+          # The gate. A user learns whether their matrix is in scope before any
+          # number appears, and a failure names the factors at fault.
           fluidRow(
             box(
-              title = "📈 Complete Spectral Analysis Results", 
+              title = "Every assumption, checked",
+              status = "primary",
+              solidHeader = TRUE,
+              width = 12,
+              collapsible = TRUE,
+              collapsed = TRUE,
+
+              h4(textOutput("assumption_checks_summary")),
+              p(paste("Every condition below is returned by the engine as data.",
+                      "A failure does not stop the diagnosis \u2014 published studies",
+                      "report these matrices \u2014 but it changes what the numbers mean.",
+                      "\u0022Not evaluated\u0022 is not a pass: it means a prerequisite",
+                      "failed and the check never ran."),
+                style = "color: #666; font-size: 90%;"),
+              DT::dataTableOutput("assumption_checks_table")
+            )
+          ),
+
+          fluidRow(
+            box(
+              title = "Complete Spectral Analysis Results", 
               status = "primary", 
               solidHeader = TRUE,
               width = 8,
               
-              h4("Diagnostics"),
-              DT::dataTableOutput("spectral_metrics_table"),
+              tags$details(class = "maths",
+                tags$summary("Show the numbers behind this"),
+                div(class = "details-body",
+                    p(class = "muted", paste(
+                      "Every quantity below is defined in the source paper and",
+                      "computed by the spectralDEMATEL package. Hover a row for",
+                      "what it means.")),
+                    DT::dataTableOutput("spectral_metrics_table"))),
+
 
               br(),
               h4("Entry and accumulation, against prominence"),
@@ -358,7 +401,7 @@ ui <- dashboardPage(
             ),
             
             box(
-              title = "📊 Key System Metrics", 
+              title = "Key System Metrics", 
               status = "info", 
               solidHeader = TRUE,
               width = 4,
@@ -381,7 +424,7 @@ ui <- dashboardPage(
           
           fluidRow(
             box(
-              title = "📊 Eigenvalue Analysis", 
+              title = "Eigenvalue Analysis", 
               status = "warning", 
               solidHeader = TRUE,
               width = 6,
@@ -391,7 +434,7 @@ ui <- dashboardPage(
             ),
             
             box(
-              title = "🔍 System Dynamics", 
+              title = "System Dynamics", 
               status = "warning", 
               solidHeader = TRUE,
               width = 6,
@@ -404,7 +447,7 @@ ui <- dashboardPage(
           # NEW: Add Total Relations Matrix display
           fluidRow(
             box(
-              title = "📋 Total Relations Matrix (T)", 
+              title = "Total Relations Matrix (T)", 
               status = "success", 
               solidHeader = TRUE,
               width = 12,
@@ -427,7 +470,7 @@ ui <- dashboardPage(
           # NEW: Add matrix properties verification box
           fluidRow(
             box(
-              title = "🔍 Matrix Properties Verification", 
+              title = "Matrix Properties Verification", 
               status = "info", 
               solidHeader = TRUE,
               width = 12,
@@ -449,7 +492,7 @@ ui <- dashboardPage(
           condition = "!output.matrix_processed",
           fluidRow(
             box(
-              title = "⚠️ Data Required",
+              title = "Data Required",
               status = "warning",
               solidHeader = TRUE,
               width = 12,
@@ -468,7 +511,7 @@ ui <- dashboardPage(
           condition = "output.matrix_processed && !output.a_matrix_available",
           fluidRow(
             box(
-              title = "⚠️ Feature Not Available",
+              title = "Feature Not Available",
               status = "warning",
               solidHeader = TRUE,
               width = 12,
@@ -491,7 +534,7 @@ ui <- dashboardPage(
           condition = "output.matrix_processed && output.a_matrix_available",
           fluidRow(
             box(
-              title = "⚙️ Sensitivity Analysis Settings", 
+              title = "Sensitivity Analysis Settings", 
               status = "primary", 
               solidHeader = TRUE,
               width = 4,
@@ -528,7 +571,7 @@ ui <- dashboardPage(
             ),
             
             box(
-              title = "📊 Sensitivity Statistics", 
+              title = "Sensitivity Statistics", 
               status = "info", 
               solidHeader = TRUE,
               width = 8,
@@ -570,7 +613,7 @@ ui <- dashboardPage(
             condition = "output.sensitivity_computed",
             fluidRow(
               box(
-                title = "🌡️ Sensitivity Heatmap", 
+                title = "Sensitivity Heatmap", 
                 status = "warning", 
                 solidHeader = TRUE,
                 width = 6,
@@ -584,7 +627,7 @@ ui <- dashboardPage(
               ),
               
               box(
-                title = "📊 DEMATEL Classical Analysis", 
+                title = "DEMATEL Classical Analysis", 
                 status = "warning", 
                 solidHeader = TRUE,
                 width = 6,
@@ -608,7 +651,7 @@ ui <- dashboardPage(
           condition = "!output.matrix_processed",
           fluidRow(
             box(
-              title = "⚠️ Data Required",
+              title = "Data Required",
               status = "warning",
               solidHeader = TRUE,
               width = 12,
@@ -625,7 +668,7 @@ ui <- dashboardPage(
           condition = "output.matrix_processed && !output.a_matrix_available",
           fluidRow(
             box(
-              title = "⚠️ Feature Not Available",
+              title = "Feature Not Available",
               status = "warning",
               solidHeader = TRUE,
               width = 12,
@@ -648,7 +691,7 @@ ui <- dashboardPage(
           condition = "!output.sensitivity_computed && output.a_matrix_available",
           fluidRow(
             box(
-              title = "⚠️ Data Required",
+              title = "Data Required",
               status = "warning",
               solidHeader = TRUE,
               width = 12,
@@ -665,7 +708,7 @@ ui <- dashboardPage(
           condition = "output.sensitivity_computed && output.a_matrix_available",
           fluidRow(
             box(
-              title = "🎯 Critical Relationships Analysis", 
+              title = "Critical Relationships Analysis", 
               status = "danger", 
               solidHeader = TRUE,
               width = 12,
@@ -710,7 +753,7 @@ ui <- dashboardPage(
           condition = "!output.matrix_processed",
           fluidRow(
             box(
-              title = "⚠️ Data Required",
+              title = "Data Required",
               status = "warning",
               solidHeader = TRUE,
               width = 12,
@@ -727,7 +770,7 @@ ui <- dashboardPage(
           condition = "output.matrix_processed && !output.a_matrix_available",
           fluidRow(
             box(
-              title = "⚠️ Feature Not Available",
+              title = "Feature Not Available",
               status = "warning",
               solidHeader = TRUE,
               width = 12,
@@ -750,7 +793,7 @@ ui <- dashboardPage(
           condition = "!output.sensitivity_computed && output.a_matrix_available",
           fluidRow(
             box(
-              title = "⚠️ Data Required",
+              title = "Data Required",
               status = "warning",
               solidHeader = TRUE,
               width = 12,
@@ -767,7 +810,7 @@ ui <- dashboardPage(
           condition = "output.sensitivity_computed && output.a_matrix_available",
           fluidRow(
             box(
-              title = "⚙️ Intervention Settings", 
+              title = "Intervention Settings", 
               status = "primary", 
               solidHeader = TRUE,
               width = 4,
@@ -803,7 +846,7 @@ ui <- dashboardPage(
             ),
             
             box(
-              title = "📊 Intervention Results", 
+              title = "Intervention Results", 
               status = "warning", 
               solidHeader = TRUE,
               width = 8,
@@ -842,7 +885,7 @@ ui <- dashboardPage(
           condition = "!output.sensitivity_computed",
           fluidRow(
             box(
-              title = "⚠️ Data Required", 
+              title = "Data Required", 
               status = "warning", 
               solidHeader = TRUE,
               width = 12,
@@ -859,7 +902,7 @@ ui <- dashboardPage(
           condition = "output.sensitivity_computed",
           fluidRow(
             box(
-              title = "📋 Executive Summary", 
+              title = "Executive Summary", 
               status = "success", 
               solidHeader = TRUE,
               width = 12,
@@ -874,7 +917,7 @@ ui <- dashboardPage(
           
           fluidRow(
             box(
-              title = "📥 Download Comprehensive Reports", 
+              title = "Download Comprehensive Reports", 
               status = "primary", 
               solidHeader = TRUE,
               width = 6,
@@ -902,7 +945,7 @@ ui <- dashboardPage(
             ),
             
             box(
-              title = "📦 Raw Data Downloads", 
+              title = "Raw Data Downloads", 
               status = "warning", 
               solidHeader = TRUE,
               width = 6,
@@ -941,7 +984,7 @@ ui <- dashboardPage(
           
           fluidRow(
             box(
-              title = "📋 Report Contents Guide", 
+              title = "Report Contents Guide", 
               status = "info", 
               solidHeader = TRUE,
               collapsible = TRUE,
@@ -986,9 +1029,24 @@ ui <- dashboardPage(
       # Help Tab
       tabItem(
         tabName = "help",
+
         fluidRow(
           box(
-            title = "❓ Help & Documentation", 
+            title = "Glossary \u2014 every term in plain words",
+            status = "primary",
+            solidHeader = TRUE,
+            width = 12,
+            p(class = "lede", paste(
+              "This application rests on spectral graph theory, but nothing here",
+              "asks you to know any. Each term below is what it means for your",
+              "system, not how it is computed.")),
+            DT::dataTableOutput("glossary_table")
+          )
+        ),
+
+        fluidRow(
+          box(
+            title = "Help & Documentation", 
             status = "info", 
             solidHeader = TRUE,
             width = 6,
@@ -1015,7 +1073,7 @@ ui <- dashboardPage(
           ),
           
           box(
-            title = "📊 Example Dataset Information", 
+            title = "Example Dataset Information", 
             status = "success", 
             solidHeader = TRUE,
             width = 6,
@@ -1042,7 +1100,7 @@ ui <- dashboardPage(
         
         fluidRow(
           box(
-            title = "💡 Tips & Best Practices", 
+            title = "Tips & Best Practices", 
             status = "warning", 
             solidHeader = TRUE,
             width = 12,
@@ -1486,6 +1544,47 @@ server <- function(input, output, session) {
     )
   })
 
+  # A glossary the user never has to leave the page to reach.
+  output$glossary_table <- DT::renderDataTable({
+    DT::datatable(metric_glossary(),
+                  options = list(pageLength = 15, dom = 't', scrollX = TRUE,
+                                 columnDefs = list(list(width = "26%", targets = 0))),
+                  rownames = FALSE)
+  })
+
+  # ---------------------------------------------------------------
+  # The plain-language verdict. Everything the mathematics establishes,
+  # said in four sentences, before any symbol appears on the screen.
+  # ---------------------------------------------------------------
+  output$plain_verdict <- renderUI({
+    req(values$spectral_results)
+    res <- values$spectral_results
+    pv <- plain_verdict(res)
+    tc <- type_card(res)
+
+    # plain_verdict() marks its lead-ins with **double asterisks**; this is the
+    # only place that turns them into markup.
+    md <- function(x) HTML(gsub("\\*\\*([^*]+)\\*\\*", "<strong>\\1</strong>", x))
+
+    ck <- res$checks
+    n_fail <- sum(ck$verdict == "fail")
+    n_warn <- sum(ck$verdict == "warn")
+    note_class <- if (n_fail > 0) "note note-fail"
+                  else if (n_warn > 0) "note note-warn"
+                  else "note note-pass"
+    note_icon <- if (n_fail > 0) "\u2716" else if (n_warn > 0) "\u26a0" else "\u2714"
+
+    div(class = "verdict",
+        if (!is.null(tc)) span(class = "verdict-type", tc$type),
+        h2(pv$headline),
+        lapply(pv$lines, function(l) tags$p(md(l))),
+        div(class = note_class, style = "margin: 14px 0 0 0;",
+            tags$b(paste(note_icon, checks_summary(res))),
+            tags$span(class = "muted", style = "margin-left: 6px;",
+                      "Full checks below."))
+    )
+  })
+
   # ---------------------------------------------------------------
   # Robustness. Run on demand and never on page load: the surrogate
   # ensemble is the one part of this application that is not instant.
@@ -1540,11 +1639,14 @@ server <- function(input, output, session) {
     tc$headline
   })
 
-  output$type_detail <- renderText({
+  output$type_detail <- renderUI({
     req(values$spectral_results)
-    tc <- type_card(values$spectral_results); if (is.null(tc)) return("")
-    paste(tc$margins, tc$corpus, tc$stability, tc$tradeoff, tc$cut_note,
-          sep = "\n\n")
+    tc <- type_card(values$spectral_results)
+    if (is.null(tc)) return(NULL)
+    tagList(lapply(c(tc$margins, tc$corpus, tc$stability, tc$tradeoff),
+                   function(x) tags$p(x, class = "muted")),
+            tags$p(tc$cut_note, class = "muted",
+                   style = "border-top: 1px solid #e2e7ec; padding-top: 9px;"))
   })
 
   output$type_logic <- renderText({

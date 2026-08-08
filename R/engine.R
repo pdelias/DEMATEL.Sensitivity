@@ -166,6 +166,103 @@ sensitivity_caveat <- function(res) {
   }
 }
 
+#' The diagnosis in plain language, before any symbol.
+#'
+#' A user arriving at this application has a matrix and a question, not a taste
+#' for spectral graph theory. Everything the mathematics establishes can be said
+#' in four sentences, and those four sentences come first. The symbols are still
+#' there, one scroll down, for anyone who wants them.
+#'
+#' Written in the second person on purpose: this is the one place in the
+#' application that addresses the user directly, because it is describing their
+#' system rather than stating a general result.
+plain_verdict <- function(res) {
+  if (!isTRUE(res$computable)) {
+    return(list(
+      headline = "This matrix cannot be diagnosed yet",
+      lines = "Something in it needs fixing first. The checks below say what."))
+  }
+
+  amplifies <- isTRUE(res$indirect_dominant)
+  concentrated <- res$hierarchy_sd > 0.10
+  single_mode <- res$dominance < 0.10
+
+  headline <- if (amplifies && concentrated)
+    "A system with one dominant entry point, and strong knock-on effects"
+  else if (amplifies && !concentrated)
+    "A system that amplifies, with no single dominant factor"
+  else if (!amplifies && concentrated)
+    "A system with one dominant entry point, and little amplification"
+  else
+    "A system where effects stay close to where they are applied"
+
+  lines <- c(
+    sprintf(paste("**Knock-on effects.** Counting every indirect path, total",
+                  "influence runs %.1f times the ratings you entered. %s"),
+            res$multiplier,
+            if (amplifies) paste("Most of what an intervention achieves here",
+                                 "arrives indirectly, so options have to be",
+                                 "judged on their total effect rather than on",
+                                 "the direct ratings.")
+            else paste("Direct influence carries most of what follows, so the",
+                       "ratings you entered already show most of what an",
+                       "intervention would produce.")),
+
+    sprintf(paste("**Where to push.** %s"),
+            if (concentrated) paste("Influence enters the system through a few",
+                                    "factors rather than spreading evenly, so",
+                                    "there is a preferred place to act. The entry",
+                                    "ranking below names it.")
+            else paste("Influence enters fairly evenly across factors. No single",
+                       "one offers materially more leverage than another, so a",
+                       "coordinated set of changes will do more than any one",
+                       "of them.")),
+
+    sprintf(paste("**Is one ranking enough?** %s"),
+            if (single_mode) paste("One pattern of propagation governs this",
+                                   "system, so a single ordering of factors",
+                                   "describes it well.")
+            else paste("A second pattern of propagation competes with the first,",
+                       "so any single ranking of factors is hiding a",
+                       "disagreement. Worth looking at before acting on one."))
+  )
+
+  list(headline = headline, lines = lines)
+}
+
+#' Plain-English glossary, so a user never has to leave to look a term up.
+#'
+#' Kept beside the numbers rather than in a separate document: a glossary a user
+#' has to go and find is a glossary nobody reads.
+metric_glossary <- function() {
+  data.frame(
+    Term = c("Coupling (μ max)",
+             "Total-effect multiplier",
+             "Indirect effects dominant",
+             "Mode dominance",
+             "Hierarchy",
+             "Entry profile",
+             "Accumulation profile",
+             "Prominence",
+             "Eigenvalue condition number",
+             "Surrogate baseline",
+             "Structural type"),
+    `In plain words` = c(
+      "How much the system feeds back into itself. Near 0, influence dies out quickly; near 1, it circulates and builds.",
+      "How much bigger total influence is than the ratings you entered. A multiplier of 4 means indirect paths carry three times as much as the direct ones.",
+      "Whether the knock-on effects outweigh the direct ones. True whenever the multiplier is above 2.",
+      "Whether one pattern of propagation governs the system or two compete. Low is one pattern; high means a single ranking of factors hides a disagreement.",
+      "How unevenly influence enters. High means a few factors are the way in; low means it enters everywhere at once.",
+      "How much influence each factor injects into the system. Where to apply pressure.",
+      "How much influence lands on each factor. Where effects end up.",
+      "The standard DEMATEL score: what a factor dispatches plus what it absorbs. Adding those two together can rank an absorber above the factor actually driving the system.",
+      "How far the per-link estimates can be trusted. 1 is ideal; large values mean the estimate is locally uninformative.",
+      "Your own ratings, shuffled at random many times. If your numbers look like the shuffles, they follow from how you rated rather than from what you connected.",
+      "Which of four corners of the map your system falls in, from its coupling and its hierarchy."),
+    check.names = FALSE, stringsAsFactors = FALSE
+  )
+}
+
 #' How firmly the type is held, in words.
 #'
 #' The engine returns the margin to each cut and stops there, because how much
@@ -314,7 +411,6 @@ structure_map <- function(res) {
     ggplot2::labs(
       x = sprintf("Coupling  (μ max)   —   dampened  |  amplified   at %.2f", ccut),
       y = sprintf("Hierarchy  (SD of entry profile)\ndiffuse  |  hierarchical   at %.2f", hcut),
-      title = st$type,
       subtitle = paste("Your system in red. Shaded band: one residual SD around",
                        "the corpus\ncoupling–hierarchy trade-off (dashed).")) +
     ggplot2::coord_cartesian(xlim = c(0, 1), ylim = c(0, ytop)) +

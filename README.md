@@ -1,8 +1,16 @@
-# DEMATEL.Sensitivity
+# Spectral DEMATEL
 
 A Shiny application for diagnosing DEMATEL influence matrices: the structural
 type of the system, whether the matrix is in scope, where influence enters and
 accumulates, and which relationship moves the system most.
+
+**Run it in your browser: <https://pdelias.github.io/DEMATEL.Sensitivity/>** —
+no install, no server, nothing uploaded. The whole thing runs client-side on
+WebAssembly.
+
+The repository is named `DEMATEL.Sensitivity` and stays that way: a published
+article cites that exact URL, so the address is fixed even though the tool
+outgrew the name. Sensitivity analysis is now one section of it.
 
 ## Requires spectralDEMATEL
 

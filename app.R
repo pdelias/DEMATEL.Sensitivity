@@ -12,7 +12,6 @@ library(DT)
 library(ggplot2)
 library(ggrepel)
 library(viridis)
-library(reshape2)
 
 # The engine. Every spectral quantity this application shows is computed here
 # and nowhere else. Install with:
@@ -1879,13 +1878,7 @@ server <- function(input, output, session) {
     tryCatch({
       sens_matrix <- values$sensitivity_results$sensitivity_matrix
       
-      if (!requireNamespace("reshape2", quietly = TRUE)) {
-        return(ggplot() + 
-                 annotate("text", x = 0.5, y = 0.5, label = "reshape2 package not available", size = 6) +
-                 theme_void())
-      }
-      
-      sens_melted <- reshape2::melt(sens_matrix)
+      sens_melted <- melt_matrix(sens_matrix)
       names(sens_melted) <- c("From_Factor", "To_Factor", "Sensitivity")
       sens_melted <- sens_melted[!is.na(sens_melted$Sensitivity), ]
       

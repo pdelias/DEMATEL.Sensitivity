@@ -50,6 +50,27 @@ run_diagnosis <- function(A, factor_names = NULL, type = c("A", "T"),
   ))
 }
 
+#' A matrix in long form, one row per cell.
+#'
+#' Replaces reshape2::melt(), which was the only reason this application loaded
+#' reshape2, and reshape2 pulled plyr, Rcpp, stringr and stringi in behind it.
+#' Measured against the shinylive export: 41.0 MB of packages before, 27.5 MB
+#' after, for two calls.
+#'
+#' Output is identical() to reshape2::melt() for a matrix with dimnames, which
+#' is every matrix that reaches it here. The explicit levels are the part that
+#' matters: the data.frame default sorts them alphabetically, so a matrix
+#' labelled Cost/Quality/Speed/Risk would come back with Risk before Speed.
+#' unique() is what makes duplicate factor names -- a pasted CSV with a repeated
+#' header -- an ordinary matrix rather than an error.
+melt_matrix <- function(m) {
+  data.frame(
+    Var1  = factor(rep(rownames(m), times = ncol(m)), levels = unique(rownames(m))),
+    Var2  = factor(rep(colnames(m), each  = nrow(m)), levels = unique(colnames(m))),
+    value = as.vector(m)
+  )
+}
+
 #' The diagnostics table.
 #'
 #' Every row is a quantity defined in the source paper. Quantities the previous

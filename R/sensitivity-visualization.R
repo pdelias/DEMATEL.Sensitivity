@@ -37,7 +37,7 @@ visualize_sensitivity.DEMATEL_Sensitivity <- function(obj, save_plots = FALSE, p
   }
   
   # Check if required packages are available
-  required_packages <- c("ggplot2", "reshape2")
+  required_packages <- c("ggplot2")
   missing_packages <- required_packages[!sapply(required_packages, function(pkg) {
     requireNamespace(pkg, quietly = TRUE)
   })]
@@ -58,7 +58,7 @@ visualize_sensitivity.DEMATEL_Sensitivity <- function(obj, save_plots = FALSE, p
   }
   
   # Prepare data for plotting
-  sens_melted <- reshape2::melt(obj$sensitivity_matrix)
+  sens_melted <- melt_matrix(obj$sensitivity_matrix)
   names(sens_melted) <- c("From_Factor", "To_Factor", "Sensitivity")
   
   # Remove NA values for plotting

@@ -1,0 +1,70 @@
+# A browser smoke test for the application.
+#
+# This repository had no CI at all while being the artefact a published article
+# cites. Two faults shipped in one day because of it, both of the same shape:
+# the application doing nothing while looking healthy. Neither was visible to
+# the server, so neither could have been caught without pressing the buttons.
+#
+# The engine's workflow is the model for the R setup; this one runs a single
+# job, because what it protects is behaviour rather than portability.
+
+name: smoke
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      # The application's own dependencies, plus the two the test needs.
+      # spectralDEMATEL comes from r-universe, which is also where the
+      # WebAssembly build the deployed app uses is produced.
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::shiny
+            any::shinydashboard
+            any::shinyWidgets
+            any::shinyjs
+            any::DT
+            any::ggplot2
+            any::ggrepel
+            any::viridis
+            any::chromote
+            any::processx
+          extra-repositories: https://pdelias.r-universe.dev
+
+      - name: Install spectralDEMATEL from r-universe
+        run: |
+          install.packages("spectralDEMATEL",
+                           repos = c("https://pdelias.r-universe.dev",
+                                     "https://cloud.r-project.org"))
+          cat("engine version:", as.character(packageVersion("spectralDEMATEL")), "\n")
+        shell: Rscript {0}
+
+      # ubuntu-latest ships Chrome; chromote finds it on PATH. Named explicitly
+      # so a runner image change fails here, with a clear message, rather than
+      # inside the test.
+      - name: Check Chrome is available
+        run: |
+          which google-chrome || which chromium-browser || which chrome
+          Rscript -e 'cat("chromote will use:", chromote::find_chrome(), "\n")'
+
+      - name: Run the smoke test
+        run: Rscript .github/smoke/smoke-test.R
+        env:
+          # Chrome cannot run as root in the default sandbox on CI images.
+          CHROMOTE_CHROME_ARGS: "--no-sandbox --disable-gpu --disable-dev-shm-usage"

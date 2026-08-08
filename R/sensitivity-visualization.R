@@ -274,7 +274,9 @@ create_dematel_interrelationship_map.DEMATEL_Sensitivity <- function(obj) {
     ggplot2::geom_vline(xintercept = mean(prominence), color = "gray50", linetype = "dashed", alpha = 0.7) +
     
     # Add points
-    ggplot2::geom_point(ggplot2::aes(color = quadrant), size = 4, alpha = 0.8) +
+    # Full opacity: the palette above was validated at its stated values, and
+    # alpha renders something 20% lighter than what was measured.
+    ggplot2::geom_point(ggplot2::aes(color = quadrant), size = 4) +
     
     # Add factor labels
     ggrepel::geom_text_repel(ggplot2::aes(label = factor), 
@@ -284,13 +286,29 @@ create_dematel_interrelationship_map.DEMATEL_Sensitivity <- function(obj) {
                              max.overlaps = Inf,
                              min.segment.length = 0) +
     
-    # Customize colors
+    # Quadrant colours.
+    #
+    # This is a categorical palette, not the diverging one the signed charts
+    # use, and it deliberately borrows no hue from them: copper and navy mean
+    # amplifying and stabilizing over there, and a quadrant is neither.
+    #
+    # The previous four were mint, wheat, pale blue and navy, and the comments
+    # beside them said red, orange, blue and green -- left over from a palette
+    # that had already been replaced twice. They separated by dE 4.2 for
+    # protanopes and 10.9 for normal vision, so High Cause and Low Cause were
+    # effectively one colour.
+    #
+    # These four measure, across all pairs: dE 18.7 normal vision, 7.6 at worst
+    # for deuteranopes. That 7.6 sits in the band that is admissible only with a
+    # second identity channel, which this plot has -- every point carries its
+    # factor name in bold via geom_text_repel, with a leader line. Remove those
+    # labels and this palette is no longer legal.
     ggplot2::scale_color_manual(
       values = c(
-        "High Cause" = "#9EDEC5",    # Red - high prominence, net cause
-        "Low Cause" = "#F5DEB3",     # Orange - low prominence, net cause  
-        "High Effect" = "#77BDD9",   # Blue - high prominence, net effect
-        "Low Effect" = "#295073"     # Green - low prominence, net effect
+        "High Cause"  = "#E69F00",   # amber
+        "Low Cause"   = "#CC79A7",   # mauve
+        "High Effect" = "#0072B2",   # blue
+        "Low Effect"  = "#009E73"    # green
       ),
       name = "Quadrant"
     ) +

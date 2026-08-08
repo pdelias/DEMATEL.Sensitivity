@@ -1390,9 +1390,21 @@ server <- function(input, output, session) {
   })
   
   # Sensitivity analysis
+  # A button pressed before its prerequisite exists used to do nothing at all.
+  # req() stops the observer silently: no spinner, no message, no error. Under
+  # webR the processing step takes seconds, so a visitor who clicks straight
+  # through on a cold load lands in that window and concludes the tool is
+  # broken. Say what is missing instead.
+  needs <- function(ok, message) {
+    if (isTRUE(ok)) return(TRUE)
+    showNotification(message, type = "warning", duration = 7)
+    FALSE
+  }
+
   observeEvent(input$run_sensitivity, {
-    req(values$matrix_A)
-    
+    if (!needs(!is.null(values$matrix_A),
+               "No matrix yet. Load one on 'Your matrix' and press Process Matrix first.")) return()
+
     withProgress(message = "Computing sensitivity analysis...", {
       tryCatch({
         # Create sensitivity object
@@ -1417,8 +1429,10 @@ server <- function(input, output, session) {
   
   # Intervention analysis
   observeEvent(input$run_intervention, {
-    req(values$sensitivity_results, input$target_lambda_change)
-    
+    if (!needs(!is.null(values$sensitivity_results),
+               "Run the sensitivity analysis first, on 'Where to act'.")) return()
+    req(input$target_lambda_change)
+
     tryCatch({
       if (exists("intervention_analysis_enhanced", mode = "function") || 
           exists("intervention_analysis", mode = "function")) {
@@ -1632,7 +1646,8 @@ server <- function(input, output, session) {
   # The seed is exposed so a user can reproduce a figure they publish.
   # ---------------------------------------------------------------
   robustness <- eventReactive(input$run_robustness, {
-    req(values$spectral_results)
+    if (!needs(!is.null(values$spectral_results),
+               "No diagnosis yet. Load a matrix and press Process Matrix first.")) return(NULL)
     withProgress(message = "Shuffling and perturbing...", {
       robustness_report(values$spectral_results,
                         B = input$robust_B,

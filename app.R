@@ -269,6 +269,37 @@ ui <- dashboardPage(
 
           fluidRow(
             box(
+              title = "🗺️ What kind of system is this?",
+              status = "primary",
+              solidHeader = TRUE,
+              width = 7,
+              plotOutput("structure_map", height = "380px")
+            ),
+            box(
+              title = "🧭 The type, and how firmly it is held",
+              status = "primary",
+              solidHeader = TRUE,
+              width = 5,
+
+              h3(textOutput("type_headline"), style = "margin-top: 0;"),
+              p(textOutput("type_confidence"), style = "color: #444;"),
+
+              div(style = paste("padding: 10px; margin: 12px 0;",
+                                "border-left: 4px solid #337ab7; background: #f4f8fb;"),
+                  strong("The intervention logic this structure favours"),
+                  p(textOutput("type_logic"), style = "margin: 6px 0 0 0;")),
+
+              div(style = "font-size: 88%; color: #8a6d3b; background: #fcf8e3; padding: 8px;",
+                  strong("This is a hypothesis, not a validated result. "),
+                  textOutput("type_caveat", inline = TRUE)),
+
+              br(),
+              verbatimTextOutput("type_detail")
+            )
+          ),
+
+          fluidRow(
+            box(
               title = "📈 Complete Spectral Analysis Results", 
               status = "primary", 
               solidHeader = TRUE,
@@ -1419,6 +1450,54 @@ server <- function(input, output, session) {
       rownames = FALSE
     )
   })
+
+  # ---------------------------------------------------------------
+  # The structure map. What kind of system this is, and how firmly.
+  #
+  # ARCHITECTURE.md section 7: the four-type map is a hypothesis presented as
+  # advice, and an interface that says "do this" will be read as stronger than
+  # the evidence. The prescription is quoted from the paper, the caveat is
+  # rendered beside it every time, and the language weakens on its own as the
+  # system approaches a boundary.
+  # ---------------------------------------------------------------
+  output$type_headline <- renderText({
+    req(values$spectral_results)
+    tc <- type_card(values$spectral_results)
+    if (is.null(tc)) return("Not classifiable; see the assumption checks above.")
+    tc$type
+  })
+
+  output$type_confidence <- renderText({
+    req(values$spectral_results)
+    tc <- type_card(values$spectral_results); if (is.null(tc)) return("")
+    tc$headline
+  })
+
+  output$type_detail <- renderText({
+    req(values$spectral_results)
+    tc <- type_card(values$spectral_results); if (is.null(tc)) return("")
+    paste(tc$margins, tc$corpus, tc$stability, tc$tradeoff, tc$cut_note,
+          sep = "\n\n")
+  })
+
+  output$type_logic <- renderText({
+    req(values$spectral_results)
+    tc <- type_card(values$spectral_results); if (is.null(tc)) return("")
+    tc$logic
+  })
+
+  output$type_caveat <- renderText({
+    req(values$spectral_results)
+    tc <- type_card(values$spectral_results); if (is.null(tc)) return("")
+    tc$caveat
+  })
+
+  output$structure_map <- renderPlot({
+    req(values$spectral_results)
+    p <- structure_map(values$spectral_results)
+    validate(need(!is.null(p), "Not available for this matrix."))
+    p
+  }, res = 110)
 
   # Entry and accumulation as two rankings, with prominence beside them so a
   # user can see where the standard deliverable disagrees with both.

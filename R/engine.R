@@ -166,6 +166,172 @@ sensitivity_caveat <- function(res) {
   }
 }
 
+#' How firmly the type is held, in words.
+#'
+#' The engine returns the margin to each cut and stops there, because how much
+#' to hedge is a presentation decision. This is that decision, in one place.
+#'
+#' The scale is the margin expressed in corpus interquartile ranges, so it means
+#' the same thing on both axes.
+type_confidence <- function(st) {
+  if (is.null(st)) return(list(level = "none", phrase = ""))
+  m <- st$nearest_margin_scaled
+  axis <- if (st$nearest_cut == "coupling") "coupling" else "hierarchy"
+
+  if (m < 0.10) {
+    list(level = "borderline", phrase = sprintf(paste(
+      "This system sits almost exactly on the %s boundary. The type below is",
+      "the side it falls on, not a reading you should rely on — a small",
+      "change to one rating would move it."), axis))
+  } else if (m < 0.35) {
+    list(level = "close", phrase = sprintf(paste(
+      "This system is close to the %s boundary. The type below holds, but not",
+      "with much room."), axis))
+  } else {
+    list(level = "clear", phrase = sprintf(paste(
+      "This system is well clear of both boundaries; the nearest is %s."),
+      axis))
+  }
+}
+
+#' The type card: what kind of system this is, and how much to trust that.
+#'
+#' Everything here is quoted or computed. The interventions are the source
+#' paper's own wording, and the caveat travels with them because a pairing of
+#' structure with a prescription is a hypothesis, not a validated result, and an
+#' interface that renders it as an instruction will be read as stronger than the
+#' evidence.
+type_card <- function(res) {
+  if (!isTRUE(res$computable)) return(NULL)
+  st <- spectralDEMATEL::structural_type(res)
+  if (is.null(st)) return(NULL)
+
+  conf <- type_confidence(st)
+  stab <- spectralDEMATEL::type_stability(res)
+  tr   <- spectralDEMATEL::tradeoff_residual(res)
+
+  list(
+    type        = st$type,
+    confidence  = conf$level,
+    headline    = conf$phrase,
+    logic       = st$intervention_logic,
+    caveat      = st$caveat,
+    margins = sprintf(paste(
+      "Coupling %.3f, %s the 0.50 cut by %.3f. Hierarchy %.3f, %s the %.2f cut",
+      "by %.3f."),
+      res$mu_max, if (st$coupling_margin >= 0) "above" else "below",
+      abs(st$coupling_margin),
+      res$hierarchy_sd, if (st$hierarchy_margin >= 0) "above" else "below",
+      st$cuts$hierarchy, abs(st$hierarchy_margin)),
+    corpus = sprintf(paste(
+      "%.0f%% of the 117 reference systems are of this type%s. Their median",
+      "total-effect multiplier is %.2f; this system's is %.2f."),
+      100 * st$corpus_share,
+      if (st$corpus_share < 0.15) ", so this is an uncommon corner of the map" else "",
+      st$corpus_multiplier, res$multiplier),
+    stability = if (is.null(stab)) "" else if (isTRUE(stab$stable))
+      sprintf(paste("The type holds across every hierarchy cut from %.3f to",
+                    "%.3f, so it does not depend on where that line is drawn."),
+              min(stab$by_cut$cut), max(stab$by_cut$cut))
+      else sprintf(paste("The type changes between hierarchy cuts %.3f and",
+                         "%.3f. Since that cut is a recommendation rather than",
+                         "a fitted constant, treat this reading as borderline."),
+                   stab$flips_between[1], stab$flips_between[2]),
+    tradeoff = if (is.null(tr)) "" else sprintf(paste(
+      "Against the corpus trade-off, hierarchy sits %.2f residual standard",
+      "deviations %s what this system's coupling predicts (%.3f expected,",
+      "%.3f observed). %s"),
+      abs(tr$residual_sd), tr$direction, tr$expected, res$hierarchy_sd,
+      tr$caveat),
+    cut_note = if (isTRUE(st$cuts$hierarchy_is_default))
+      paste("The coupling cut at 0.50 is the indirect-dominance threshold and",
+            "follows from the algebra. The hierarchy cut at 0.10 is a",
+            "recommendation, not a fitted constant.")
+      else sprintf(paste("Classified with a user-defined hierarchy cut of %.3f",
+                         "rather than the recommended 0.10."), st$cuts$hierarchy)
+  )
+}
+
+#' The structure map: the user's system against the corpus reference band.
+#'
+#' The 117 individual systems are not plotted, because they are not ours to
+#' publish. What is shown is the corpus spread on each axis and the fitted
+#' trade-off, which is what a user actually needs to know where they sit.
+structure_map <- function(res) {
+  if (!isTRUE(res$computable)) return(NULL)
+  cp <- spectralDEMATEL:::CORPUS
+  st <- spectralDEMATEL::structural_type(res)
+
+  mu <- seq(0.05, 0.98, length.out = 100)
+  line <- data.frame(mu_max = mu,
+                     hierarchy = cp$tradeoff$intercept + cp$tradeoff$slope * mu)
+  line$lo <- line$hierarchy - cp$tradeoff$resid_sd
+  line$hi <- line$hierarchy + cp$tradeoff$resid_sd
+
+  ytop <- max(0.30, res$hierarchy_sd * 1.15)
+  hcut <- st$cuts$hierarchy
+  ccut <- st$cuts$coupling
+
+  # Name every quadrant, not just the one the system landed in. A user needs to
+  # see what the other three would have meant, and how uneven the corpus is
+  # across them -- a system in the 7% corner deserves to know it is unusual.
+  share <- function(ty) sprintf("%s\n%.0f%% of corpus",
+                               ty, 100 * CORPUS_SHARE[[ty]])
+  # Placed in the outer corner of each quadrant rather than its centre: the
+  # trade-off band runs diagonally through every centre, and so does the point
+  # itself. A label a user has to read through a ribbon is not a label.
+  pad <- 0.02
+  quad <- data.frame(
+    x     = c(pad,    1 - pad, pad,        1 - pad),
+    y     = c(pad * ytop, pad * ytop, ytop * (1 - pad), ytop * (1 - pad)),
+    hjust = c(0, 1, 0, 1),
+    vjust = c(0, 0, 1, 1),
+    label = c(share("diffuse-dampened"), share("diffuse-amplified"),
+              share("hierarchical-dampened"), share("hierarchical-amplified")),
+    stringsAsFactors = FALSE
+  )
+  quad$here <- quad$label == share(st$type)
+
+  ggplot2::ggplot() +
+    ggplot2::geom_ribbon(data = line,
+      ggplot2::aes(x = mu_max, ymin = pmax(lo, 0), ymax = hi),
+      fill = "grey85", alpha = 0.55) +
+    ggplot2::geom_line(data = line,
+      ggplot2::aes(x = mu_max, y = hierarchy), colour = "grey45",
+      linetype = "22") +
+    ggplot2::geom_text(data = quad,
+      ggplot2::aes(x = x, y = y, label = label, hjust = hjust, vjust = vjust,
+                   fontface = ifelse(here, "bold", "plain"),
+                   colour = here),
+      size = 3.1, lineheight = 0.95, show.legend = FALSE) +
+    ggplot2::scale_colour_manual(values = c(`TRUE` = "#8C2B21", `FALSE` = "grey72")) +
+    ggplot2::geom_vline(xintercept = ccut, colour = "grey30") +
+    ggplot2::geom_hline(yintercept = hcut, colour = "grey30", linetype = "31") +
+    ggplot2::geom_point(
+      data = data.frame(x = res$mu_max, y = res$hierarchy_sd),
+      ggplot2::aes(x = x, y = y), size = 5, shape = 21,
+      fill = "#C0392B", colour = "white", stroke = 1.2) +
+    ggplot2::labs(
+      x = sprintf("Coupling  (μ max)   —   dampened  |  amplified   at %.2f", ccut),
+      y = sprintf("Hierarchy  (SD of entry profile)\ndiffuse  |  hierarchical   at %.2f", hcut),
+      title = st$type,
+      subtitle = paste("Your system in red. Shaded band: one residual SD around",
+                       "the corpus\ncoupling–hierarchy trade-off (dashed).")) +
+    ggplot2::coord_cartesian(xlim = c(0, 1), ylim = c(0, ytop)) +
+    ggplot2::theme_minimal(base_size = 12) +
+    ggplot2::theme(
+      plot.title = ggplot2::element_text(face = "bold", colour = "#8C2B21"),
+      plot.subtitle = ggplot2::element_text(colour = "grey40", size = 8.5),
+      axis.title = ggplot2::element_text(size = 9, colour = "grey30"),
+      panel.grid.minor = ggplot2::element_blank())
+}
+
+# Corpus shares, read from the engine so this file holds no constant of its own.
+CORPUS_SHARE <- local({
+  cp <- spectralDEMATEL:::CORPUS
+  as.list(cp$count / cp$n)
+})
+
 #' A long-format export carrying the diagnostics, the checks and the engine
 #' version together.
 #'

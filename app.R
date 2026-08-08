@@ -129,6 +129,35 @@ ui <- dashboardPage(
         "      if (window.parent && window.parent !== window)",
         "        window.parent.document.title = 'Spectral DEMATEL'; }",
         "catch (e) {}"
+      )),
+
+      # Says that the application is working. Under webR a press can be followed
+      # by a minute of nothing: R is single-threaded, so while it computes it
+      # cannot repaint, and Shiny's own signal -- opacity 0.3 on recalculating
+      # outputs -- shows nothing at all on an output that has never rendered.
+      #
+      # shiny:busy and shiny:idle are client-side bookkeeping of an outstanding
+      # request, so they are accurate precisely when R is blocked and nothing
+      # server-driven could report anything.
+      #
+      # The 400 ms delay matters: an ordinary input round trip is busy for about
+      # 30 ms, and showing the banner for those would be a flicker on every
+      # click. Only waits long enough to worry someone get announced.
+      tags$script(HTML(
+        "(function () {",
+        "  var pending = null;",
+        "  $(document).on('shiny:busy', function () {",
+        "    if (pending) return;",
+        "    pending = setTimeout(function () {",
+        "      document.body.classList.add('sd-working');",
+        "      pending = null;",
+        "    }, 400);",
+        "  });",
+        "  $(document).on('shiny:idle', function () {",
+        "    if (pending) { clearTimeout(pending); pending = null; }",
+        "    document.body.classList.remove('sd-working');",
+        "  });",
+        "})();"
       ))
     ),
     tabItems(

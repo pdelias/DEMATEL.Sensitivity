@@ -106,6 +106,41 @@ report(identical(js("document.title"), "Spectral DEMATEL"),
        "the page is titled Spectral DEMATEL",
        js("document.title"))
 
+# ------------------------------------------------------ the working banner ---
+#
+# Driven by shiny:busy / shiny:idle, because under webR R blocks and nothing
+# server-driven can repaint. Asserted by firing those events rather than by
+# finding a slow computation: locally the work takes 30 ms and the banner is
+# deliberately suppressed below 400 ms.
+#
+# It is asserted at all because a stray edit once left the CSS comment above
+# these rules unterminated, which silently dropped `cursor: progress` -- a whole
+# rule gone with nothing to show for it.
+
+cat("\nthe working banner\n")
+
+banner <- function() {
+  js(paste0("(function(){return JSON.stringify({",
+            "cls: document.body.classList.contains('sd-working'),",
+            "pill: (getComputedStyle(document.body,'::after').content||'none') !== 'none',",
+            "bar: getComputedStyle(document.body,'::before').height,",
+            "cursor: getComputedStyle(document.body).cursor});})()"))
+}
+
+report(!grepl('"cls":true', banner()), "the banner is absent when idle", banner())
+
+invisible(js("$(document).trigger('shiny:busy')"))
+report(wait_for("document.body.classList.contains('sd-working')", timeout = 5),
+       "the banner appears while the app is busy")
+report(grepl('"pill":true', banner()) &&
+       grepl('"bar":"3px"', banner()) &&
+       grepl('"cursor":"progress"', banner()),
+       "it shows a bar, a message and a busy cursor", banner())
+
+invisible(js("$(document).trigger('shiny:idle')"))
+report(wait_for("!document.body.classList.contains('sd-working')", timeout = 5),
+       "the banner clears when the app goes idle")
+
 # ------------------------------------------- a button pressed with nothing ---
 #
 # Regression test: run_sensitivity used req(), which stops the observer in

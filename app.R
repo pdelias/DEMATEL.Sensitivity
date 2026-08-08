@@ -9,6 +9,11 @@ library(shinyWidgets)
 # drags stringi, data.table, openssl, curl and httr into the WebAssembly
 # bundle -- about 15 MB on every first visit, for nothing.
 library(DT)
+# shinyjs was being called without ever being loaded or initialised, so
+# shinyjs::click() sent a message to a client handler that did not exist and was
+# dropped in silence -- no error, server-side or in the console. It costs
+# nothing to add: shinydashboard already pulls it into the WebAssembly bundle.
+library(shinyjs)
 library(ggplot2)
 library(ggrepel)
 library(viridis)
@@ -106,6 +111,10 @@ ui <- dashboardPage(
   # Body
   dashboardBody(
     # Include custom CSS
+    # Registers the client-side handlers shinyjs::click() talks to. Without it
+    # that call is a no-op that reports nothing.
+    useShinyjs(),
+
     tags$head(
       tags$link(rel = "stylesheet", type = "text/css", href = "styles.css"),
       tags$title("Spectral DEMATEL"),
@@ -1383,9 +1392,10 @@ server <- function(input, output, session) {
   observeEvent(input$load_example_now, {
     updateRadioButtons(session, "input_method", selected = "example")
     updateTabItems(session, "sidebar", "input")
-    
-    # Trigger processing
-    Sys.sleep(0.1)  # Small delay to ensure UI updates
+
+    # No Sys.sleep() here any more. R is single-threaded: sleeping in an
+    # observer blocks the process that would have sent the UI update, so the
+    # delay it was meant to allow for could not happen during it.
     shinyjs::click("process_matrix")
   })
   

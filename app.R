@@ -978,7 +978,12 @@ ui <- dashboardPage(
               
               div(style = "margin-bottom: 15px;",
                   downloadButton(
-                    "download_T_matrix",
+                    # Distinct from the button beside the T matrix table. Two
+                    # buttons shared this id, which Shiny warns about on every
+                    # load and which leaves one of them unbound. Both placements
+                    # are wanted -- one in context, one in the downloads hub --
+                    # so they get an id each and share the handler below.
+                    "download_T_matrix_raw",
                     "📋 Total Relations Matrix (CSV)",
                     class = "btn-success btn-block"
                   ),
@@ -2043,10 +2048,6 @@ server <- function(input, output, session) {
           top_10$relationship <- paste0(top_10$from_factor, " → ", top_10$to_factor)
           top_10$relationship <- factor(top_10$relationship, levels = rev(top_10$relationship))
           
-          ##DEBUG
-          cat("Unique interpretation values:", unique(top_10$interpretation), "\n")
-          print(table(top_10$interpretation))
-          
           ggplot(top_10, aes(x = relationship, y = sensitivity, fill = interpretation)) +
             geom_col(alpha = 0.8) +
             coord_flip() +
@@ -2174,62 +2175,11 @@ server <- function(input, output, session) {
     })
   })
   
-  # Executive summary for report
-  output$executive_summary <- renderText({
-    req(values$sensitivity_results)
-    
-    tryCatch({
-      if (exists("get_sensitivity_stats", mode = "function") && 
-          exists("identify_critical_relationships", mode = "function")) {
-        
-        stats <- get_sensitivity_stats(values$sensitivity_results)
-        critical_90 <- identify_critical_relationships(values$sensitivity_results, 90)
-        critical_95 <- identify_critical_relationships(values$sensitivity_results, 95)
-        
-        summary_text <- paste(
-          "EXECUTIVE SUMMARY\n",
-          "================\n\n",
-          "System Overview:\n",
-          "- Matrix size:", values$spectral_results$n, "×", values$spectral_results$n, "\n",
-          "- Dominant eigenvalue (λmax):", round(values$spectral_results$lambda_max, 6), "\n\n",
-          
-          "Sensitivity Analysis:\n",
-          "- Total relationships analyzed:", stats$total_elements, "\n",
-          "- Amplifying relationships:", stats$n_positive, 
-          " (", round(100*stats$n_positive/stats$total_elements, 1), "%)\n",
-          "- Dampening relationships:", stats$n_negative, 
-          " (", round(100*stats$n_negative/stats$total_elements, 1), "%)\n",
-          "- Mean absolute sensitivity:", round(stats$mean_abs, 6), "\n\n",
-          
-          "Critical Relationships:\n",
-          "- 90th percentile threshold:", nrow(critical_90), "relationships\n",
-          "- 95th percentile threshold:", nrow(critical_95), "relationships\n"
-        )
-        
-        if (nrow(critical_95) > 0) {
-          top_critical <- head(critical_95, 3)
-          summary_text <- paste(summary_text, "\nTop 3 Most Critical:\n")
-          for (i in 1:nrow(top_critical)) {
-            summary_text <- paste(summary_text, 
-                                  paste0(i, ". ", top_critical$from_factor[i], " → ", 
-                                         top_critical$to_factor[i], ": ", 
-                                         round(top_critical$sensitivity[i], 6), 
-                                         " (", top_critical$interpretation[i], ")\n"))
-          }
-        }
-        
-        return(summary_text)
-      } else {
-        return("Executive summary functions not available")
-      }
-      
-    }, error = function(e) {
-      paste("Error generating executive summary:", e$message)
-    })
-  })
-  
-  # =============================================================
-  # NEW: Replace the above executive_summary with enhanced version
+  # Executive summary for the report tab.
+  #
+  # There were two assignments to this output. Shiny keeps the last, so the
+  # first -- 54 lines of it -- had never run. A comment on the second said
+  # "replace the above"; the replacing was the part that did not happen.
   output$executive_summary <- renderText({
     req(values$sensitivity_results)
     
@@ -2631,9 +2581,9 @@ server <- function(input, output, session) {
     }
   )
   
-  # =============================================================
-  # NEW: Add T matrix download handler
-  output$download_T_matrix <- downloadHandler(
+  # The T matrix download, offered in two places: beside the matrix itself and
+  # in the downloads hub. One handler, written once, registered under both ids.
+  t_matrix_download <- downloadHandler(
     filename = function() {
       paste0("total_relations_matrix_", Sys.Date(), ".csv")
     },
@@ -2646,8 +2596,8 @@ server <- function(input, output, session) {
       }
     }
   )
-  # END NEW
-  # =============================================================
+  output$download_T_matrix     <- t_matrix_download
+  output$download_T_matrix_raw <- t_matrix_download
   
   # Helper function for null coalescing
   `%||%` <- function(x, y) {
@@ -2678,8 +2628,6 @@ read_csv_robust <- function(filepath, header = FALSE) {
   } else {
     ","
   }
-  
-  cat("Detected separator:", ifelse(separator == "\t", "TAB", separator), "\n")
   
   # Read with detected separator
   data_raw <- read.csv(filepath, header = header, stringsAsFactors = FALSE, 

@@ -23,7 +23,7 @@
 #' @examples
 #' A <- matrix(c(0, 3, 2, 2, 0, 3, 1, 2, 0), nrow = 3, byrow = TRUE)
 #' sens_obj <- DEMATEL_Sensitivity(A)
-#' sens_obj <- compute_sensitivity_numerical(sens_obj)
+#' sens_obj <- compute_sensitivity_analytical(sens_obj)
 #' critical <- identify_critical_relationships(sens_obj, threshold_percentile = 80)
 #'
 #' @export
@@ -34,7 +34,7 @@ identify_critical_relationships <- function(obj, threshold_percentile = 90) {
 #' @export
 identify_critical_relationships.DEMATEL_Sensitivity <- function(obj, threshold_percentile = 90) {
   if (is.null(obj$sensitivity_matrix)) {
-    stop("Please compute sensitivity matrix first using compute_sensitivity_numerical() or compute_sensitivity_analytical()")
+    stop("Please compute sensitivity matrix first using compute_sensitivity_analytical()")
   }
 
   if (threshold_percentile < 0 || threshold_percentile > 100) {
@@ -330,7 +330,7 @@ analyze_boundary_constraints.DEMATEL_Sensitivity <- function(obj, max_value = 4,
 #' @examples
 #' A <- matrix(c(0, 3, 2, 2, 0, 3, 1, 2, 0), nrow = 3, byrow = TRUE)
 #' sens_obj <- DEMATEL_Sensitivity(A)
-#' sens_obj <- compute_sensitivity_numerical(sens_obj)
+#' sens_obj <- compute_sensitivity_analytical(sens_obj)
 #' interventions <- intervention_analysis(sens_obj, target_lambda_change = -0.1)
 #'
 #' @export
@@ -406,7 +406,7 @@ intervention_analysis.DEMATEL_Sensitivity <- function(obj, target_lambda_change,
 #' @examples
 #' A <- matrix(c(0, 3, 2, 2, 0, 3, 1, 2, 0), nrow = 3, byrow = TRUE)
 #' sens_obj <- DEMATEL_Sensitivity(A)
-#' sens_obj <- compute_sensitivity_numerical(sens_obj)
+#' sens_obj <- compute_sensitivity_analytical(sens_obj)
 #' stats <- get_sensitivity_stats(sens_obj)
 #'
 #' @export
@@ -479,7 +479,7 @@ print.DEMATEL_Sensitivity <- function(x, ...) {
     cat(sprintf("  Stabilizers relationships: %d\n", stats$n_negative))
   } else {
     cat("Sensitivity matrix: Not computed\n")
-    cat("Use compute_sensitivity_numerical() or compute_sensitivity_analytical()\n")
+    cat("Use compute_sensitivity_analytical()\n")
   }
   
   invisible(x)
@@ -526,7 +526,7 @@ summary.DEMATEL_Sensitivity <- function(object, ...) {
     }
   } else {
     cat("\nSensitivity matrix not computed.\n")
-    cat("Use compute_sensitivity_numerical() or compute_sensitivity_analytical() first.\n")
+    cat("Use compute_sensitivity_analytical() first.\n")
   }
 
   invisible(object)

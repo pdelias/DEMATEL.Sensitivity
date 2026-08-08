@@ -1,593 +1,359 @@
-/* Custom CSS for DEMATEL Sensitivity Analysis Shiny App */
-/* File: www/styles.css - Scientific Color Palette - No Gradients */
-/* 
-Color Palette:
-#77BDD9 - Light Gray (primary neutral) #77BDD9
-#295073 - Dark Burgundy (primary accent)  --> ##295073
-#356B8C - Medium Burgundy (secondary accent) #356B8C
-#F2F2F2 - Light Gray (backgrounds) #8FCBD9
-#0D0D0D - Near Black (text)
-Additional: #C81102 (alert red), #9EDEC5 (success green)
-*/
+/* DEMATEL Sensitivity Analysis — interface styles
+ *
+ * Two principles behind everything here.
+ *
+ * The meaning comes before the mathematics. A user arrives with a matrix and a
+ * question, not a taste for spectral graph theory, so plain language is styled
+ * as the primary content and the symbols are styled as support.
+ *
+ * Nothing is loaded from a third party. The previous version imported Inter
+ * from Google Fonts, which is a request to a third-party server on every visit.
+ * This application's whole proposition is that a user's matrices never leave
+ * their browser, and a webfont request quietly contradicts it while also adding
+ * to a first load that is already large in the WebAssembly build. The system
+ * font stack below costs nothing and ships nothing.
+ */
 
-/* Import Google Fonts */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+/* ------------------------------------------------------------------ tokens */
 
-/* Global Styles - Force Override */
+:root {
+  /* Brand blues, carried over from the previous palette. */
+  --ink:            #16212b;
+  --ink-soft:       #55636f;
+  --ink-faint:      #7d8994;
+  --accent:         #295073;
+  --accent-mid:     #356B8C;
+  --accent-light:   #77BDD9;
+  --accent-wash:    #eef4f8;
+
+  /* Status. Computed and validated rather than chosen by eye: every pair
+   * clears the normal-vision floor (worst adjacent ΔE 21.8) and colour-vision
+   * separation (worst ΔE 9.7), and all four reach 3:1 against the surface.
+   * The neutral is deliberately achromatic — "not evaluated" should read as
+   * absence, not as a fourth state competing for attention.
+   * Status colour never travels alone; every use carries an icon and a word. */
+  --pass:           #00805F;
+  --pass-wash:      #e8f5f0;
+  --warn:           #C67C00;
+  --warn-wash:      #fdf4e3;
+  --fail:           #96121E;
+  --fail-wash:      #fbecec;
+  --neutral:        #6E767F;
+  --neutral-wash:   #f1f3f4;
+
+  --surface:        #ffffff;
+  --page:           #f4f6f8;
+  --line:           #e2e7ec;
+  --radius:         6px;
+}
+
 * {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               "Helvetica Neue", Arial, sans-serif;
 }
 
 body, html {
-  background-color: #F2F2F2 !important;
-  font-size: 14px !important;
-  line-height: 1.6 !important;
-  color: #0D0D0D !important;
+  background-color: var(--page);
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink);
 }
 
-/* Header Styles - Complete Override - FIX BLUE LABEL */
+/* ------------------------------------------------------------------ chrome */
+
 .main-header .navbar,
-.navbar-static-top {
-  background: #295073 !important;
-  background-image: none !important;
-  border-bottom: none !important;
-  box-shadow: 0 2px 10px rgba(13, 13, 13, 0.15) !important;
-}
-
-.main-header .navbar-brand,
-.navbar-brand {
-  background: #295073 !important;
-  background-image: none !important;
-  color: #F2F2F2 !important;
-  font-weight: 600 !important;
-  font-size: 18px !important;
-}
-
-/* Fix for the title/logo area - REMOVE BLUE BACKGROUND */
 .main-header .logo,
-.logo {
-  background: #295073 !important;
-  background-image: none !important;
-  background-color: #295073 !important;
-  color: #F2F2F2 !important;
-  border-right: 1px solid rgba(242, 242, 242, 0.1) !important;
-}
-
-.main-header .logo:hover,
-.logo:hover {
-  background: #295073 !important;
-  background-image: none !important;
-  background-color: #295073 !important;
-  color: #F2F2F2 !important;
-}
-
-/* Fix for navbar toggle */
-.main-header .navbar-toggle,
-.navbar-toggle {
-  background-color: transparent !important;
-  border-color: #F2F2F2 !important;
-}
-
-.main-header .navbar-toggle .icon-bar {
-  background-color: #F2F2F2 !important;
-}
-
-/* Sidebar Styles - Complete Override - NO GRADIENTS */
-.main-sidebar,
-.left-side {
-  background: #0D0D0D !important;
-  background-image: none !important;
-  background-color: #0D0D0D !important;
-  box-shadow: 2px 0 10px rgba(13, 13, 13, 0.2) !important;
-}
-
-.sidebar-menu,
-.sidebar .sidebar-menu {
-  background: transparent !important;
-  background-image: none !important;
-}
-
-.sidebar-menu > li > a,
-.sidebar .sidebar-menu > li > a {
-  color: #F2F2F2 !important;
-  font-weight: 500 !important;
-  padding: 15px 20px !important;
-  transition: all 0.3s ease !important;
-  background: transparent !important;
-  background-image: none !important;
+.navbar-static-top {
+  background-color: var(--accent) !important;
   border: none !important;
+  box-shadow: none !important;
 }
-
-.sidebar-menu > li > a:hover,
-.sidebar-menu > li.active > a,
-.sidebar-menu > li:hover > a,
-.sidebar .sidebar-menu > li > a:hover,
-.sidebar .sidebar-menu > li.active > a,
-.sidebar .sidebar-menu > li:hover > a {
-  background: rgba(119, 189, 217, 0.5) !important;
-  background-image: none !important;
-  color: #F2F2F2 !important;
-  border-left: 4px solid #356B8C !important;
-  margin-left: 0 !important;
+.main-header .logo {
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
+.main-header .logo:hover { background-color: var(--accent) !important; }
 
-.sidebar-menu > li > a > .fa,
-.sidebar-menu > li > a > .glyphicon,
-.sidebar .sidebar-menu > li > a > .fa,
-.sidebar .sidebar-menu > li > a > .glyphicon {
-  margin-right: 12px !important;
-  font-size: 16px !important;
-  color: inherit !important;
+.main-sidebar, .left-side { background-color: #1d2b38 !important; }
+
+.sidebar-menu > li > a {
+  color: #c3ced8 !important;
+  border-left: 3px solid transparent !important;
+  padding: 11px 12px !important;
+  line-height: 1.35;
 }
-
-/* Content Area - Complete Override */
-.content-wrapper,
-.right-side {
-  background-color: #F2F2F2 !important;
-  background-image: none !important;
-  min-height: calc(100vh - 50px) !important;
+.sidebar-menu > li:hover > a {
+  background-color: #26374a !important;
+  color: #fff !important;
 }
-
-.content {
-  padding: 20px !important;
+.sidebar-menu > li.active > a {
+  background-color: #26374a !important;
+  border-left-color: var(--accent-light) !important;
+  color: #fff !important;
+  font-weight: 600;
 }
+/* The question each section answers, under its label. */
+.sidebar-menu .menu-sub {
+  display: block;
+  font-size: 11.5px;
+  color: #8b9aa8;
+  font-weight: 400;
+  line-height: 1.3;
+  margin-top: 1px;
+}
+.sidebar-menu > li.active .menu-sub { color: #a8bccd; }
 
-/* Box Styles - Complete Override */
+.content-wrapper { background-color: var(--page) !important; }
+
+/* ------------------------------------------------------------------- boxes */
+
 .box {
-  border-radius: 8px !important;
-  box-shadow: 0 2px 8px rgba(13, 13, 13, 0.1) !important;
-  border: 1px solid #77BDD9 !important;
-  margin-bottom: 20px !important;
-  transition: transform 0.2s ease, box-shadow 0.2s ease !important;
-  background: white !important;
-  background-image: none !important;
+  border: 1px solid var(--line);
+  border-top: none;
+  border-radius: var(--radius);
+  box-shadow: 0 1px 2px rgba(22, 33, 43, 0.05);
 }
-
-.box:hover {
-  transform: translateY(-2px) !important;
-  box-shadow: 0 4px 16px rgba(13, 13, 13, 0.15) !important;
-  border-color: #356B8C !important;
-}
-
 .box-header {
-  background: white !important;
-  background-image: none !important;
-  border-bottom: 2px solid #77BDD9 !important;
-  padding: 15px 20px !important;
-  border-radius: 8px 8px 0 0 !important;
+  border-bottom: 1px solid var(--line);
+  padding: 13px 16px;
 }
-
-.box-title {
-  font-weight: 600 !important;
-  font-size: 16px !important;
-  color: #0D0D0D !important;
+.box-header .box-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
+.box.box-solid > .box-header { color: #fff; }
+.box.box-solid.box-primary > .box-header { background: var(--accent); }
+.box.box-solid.box-info    > .box-header { background: var(--accent-mid); }
+.box.box-solid.box-warning > .box-header { background: var(--warn); }
+.box-body { padding: 16px; }
 
-.box-body {
-  padding: 20px !important;
-  background: white !important;
-  background-image: none !important;
+/* --------------------------------------------------------- the verdict card */
+
+/* The one piece of the page that is meant to be read first and understood
+ * without any background. Sized and spaced accordingly. */
+.verdict {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 20px 22px;
 }
-
-/* Status-specific box colors - Override */
-.box-primary > .box-header {
-  border-bottom-color: #295073 !important;
-  background: white !important;
-  background-image: none !important;
+.verdict h2 {
+  margin: 0 0 4px 0;
+  font-size: 21px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  line-height: 1.3;
 }
-
-.box-success > .box-header {
-  border-bottom-color: #9EDEC5 !important;
-  background: white !important;
-  background-image: none !important;
+.verdict .verdict-type {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--accent-wash);
+  border-radius: 100px;
+  padding: 3px 11px;
+  margin-bottom: 10px;
 }
+.verdict p { margin: 0 0 10px 0; color: var(--ink-soft); }
+.verdict p:last-child { margin-bottom: 0; }
+.verdict strong { color: var(--ink); font-weight: 600; }
 
-.box-warning > .box-header {
-  border-bottom-color: #356B8C !important;
-  background: white !important;
-  background-image: none !important;
+/* ------------------------------------------------------------ status blocks */
+
+.note {
+  border-radius: var(--radius);
+  padding: 11px 14px;
+  font-size: 14px;
+  border-left: 3px solid;
+  margin-bottom: 14px;
 }
+.note-pass    { background: var(--pass-wash);    border-color: var(--pass);    color: #14503f; }
+.note-warn    { background: var(--warn-wash);    border-color: var(--warn);    color: #6d4600; }
+.note-fail    { background: var(--fail-wash);    border-color: var(--fail);    color: #6a1017; }
+.note-neutral { background: var(--neutral-wash); border-color: var(--neutral); color: #414952; }
 
-.box-danger > .box-header {
-  border-bottom-color: #C81102 !important;
-  background: white !important;
-  background-image: none !important;
+/* The hypothesis caveat. Deliberately not styled as an error: it is a standing
+ * qualification on every prescription this application makes, not a problem
+ * with the user's matrix. */
+.caveat {
+  background: var(--neutral-wash);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  padding: 11px 14px;
+  font-size: 13px;
+  color: var(--ink-soft);
 }
+.caveat strong { color: var(--ink); }
 
-.box-info > .box-header {
-  border-bottom-color: #77BDD9 !important;
-  background: white !important;
-  background-image: none !important;
+/* ------------------------------------------------------- progressive detail */
+
+/* The mathematics folds away. It is never removed — a user who wants
+ * lambda_max can always reach it — but it does not greet anyone. */
+details.maths {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  margin-top: 14px;
 }
-
-/* Box header icons */
-.box-header .fa,
-.box-header .glyphicon {
-  color: inherit !important;
+details.maths > summary {
+  cursor: pointer;
+  padding: 11px 15px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--accent);
+  list-style: none;
+  user-select: none;
 }
+details.maths > summary::-webkit-details-marker { display: none; }
+details.maths > summary::before { content: "▸  "; color: var(--ink-faint); }
+details[open].maths > summary::before { content: "▾  "; }
+details.maths > summary:hover { background: var(--accent-wash); }
+details.maths .details-body { padding: 4px 15px 15px 15px; }
 
-/* Button Styles - Complete Override - NO GRADIENTS */
-.btn {
-  border-radius: 6px !important;
-  font-weight: 500 !important;
-  padding: 10px 20px !important;
-  transition: all 0.3s ease !important;
-  border: none !important;
-  font-size: 14px !important;
-  background-image: none !important;
-}
+/* ------------------------------------------------------------------ tables */
 
-.btn-lg {
-  padding: 15px 30px !important;
-  font-size: 16px !important;
-  font-weight: 600 !important;
-}
-
-.btn-primary {
-  background: #295073 !important;
-  background-image: none !important;
-  background-color: #295073 !important;
-  box-shadow: 0 4px 12px rgba(119, 189, 217, 0.6) !important;
-  color: #F2F2F2 !important;
-  border: none !important;
-}
-
-.btn-primary:hover,
-.btn-primary:focus,
-.btn-primary:active {
-  background: #356B8C !important;
-  background-image: none !important;
-  background-color: #356B8C !important;
-  transform: translateY(-2px) !important;
-  box-shadow: 0 6px 16px rgba(119, 189, 217, 0.7) !important;
-  color: #F2F2F2 !important;
-  border: none !important;
-}
-
-.btn-success {
-  background: #9EDEC5 !important;
-  background-image: none !important;
-  background-color: #9EDEC5 !important;
-  box-shadow: 0 4px 12px rgba(158, 222, 197, 0.4) !important;
-  color: #0D0D0D !important;
-  border: none !important;
-}
-
-.btn-success:hover,
-.btn-success:focus,
-.btn-success:active {
-  background: #77BDD9 !important;
-  background-image: none !important;
-  background-color: #77BDD9 !important;
-  transform: translateY(-2px) !important;
-  color: #F2F2F2 !important;
-  border: none !important;
-}
-
-.btn-warning {
-  background: #356B8C !important;
-  background-image: none !important;
-  background-color: #356B8C !important;
-  box-shadow: 0 4px 12px rgba(119, 189, 217, 0.5) !important;
-  color: #F2F2F2 !important;
-  border: none !important;
-}
-
-.btn-warning:hover,
-.btn-warning:focus,
-.btn-warning:active {
-  background: #77BDD9 !important;
-  background-image: none !important;
-  background-color: #77BDD9 !important;
-  transform: translateY(-2px) !important;
-  color: #F2F2F2 !important;
-  border: none !important;
-}
-
-.btn-danger {
-  background: #C81102 !important;
-  background-image: none !important;
-  background-color: #C81102 !important;
-  box-shadow: 0 4px 12px rgba(200, 17, 2, 0.4) !important;
-  color: #F2F2F2 !important;
-  border: none !important;
-}
-
-.btn-danger:hover,
-.btn-danger:focus,
-.btn-danger:active {
-  background: #295073 !important;
-  background-image: none !important;
-  background-color: #295073 !important;
-  transform: translateY(-2px) !important;
-  color: #F2F2F2 !important;
-  border: none !important;
-}
-
-.btn-info {
-  background: #77BDD9 !important;
-  background-image: none !important;
-  background-color: #77BDD9 !important;
-  box-shadow: 0 4px 12px rgba(132, 135, 140, 0.4) !important;
-  color: #F2F2F2 !important;
-  border: none !important;
-}
-
-.btn-info:hover,
-.btn-info:focus,
-.btn-info:active {
-  background: #295073 !important;
-  background-image: none !important;
-  background-color: #295073 !important;
-  transform: translateY(-2px) !important;
-  color: #F2F2F2 !important;
-  border: none !important;
-}
-
-/* Input Styles - Complete Override */
-.form-control {
-  border: 2px solid #77BDD9 !important;
-  border-radius: 6px !important;
-  padding: 12px 15px !important;
-  transition: border-color 0.3s ease, box-shadow 0.3s ease !important;
-  font-size: 14px !important;
-  color: #0D0D0D !important;
-  background: white !important;
-  background-image: none !important;
-}
-
-.form-control:focus {
-  border-color: #356B8C !important;
-  box-shadow: 0 0 0 0.2rem rgba(166, 97, 91, 0.25) !important;
-  outline: none !important;
-  background: white !important;
-  background-image: none !important;
-}
-
-.form-group label,
-.control-label {
-  font-weight: 500 !important;
-  color: #0D0D0D !important;
-  margin-bottom: 8px !important;
-}
-
-/* Radio Button and Checkbox Styles */
-.radio label,
-.checkbox label {
-  font-weight: 400 !important;
-  color: #0D0D0D !important;
-}
-
-.radio input[type="radio"],
-.checkbox input[type="checkbox"] {
-  margin-right: 8px !important;
-  accent-color: #356B8C !important;
-}
-
-/* DataTable Styles - Complete Override - NO GRADIENTS */
-.dataTables_wrapper {
-  margin-top: 20px !important;
-}
-
-.dataTable,
-table.dataTable {
-  border-radius: 6px !important;
-  overflow: hidden !important;
-  border-collapse: separate !important;
-  border-spacing: 0 !important;
-  background: white !important;
-  background-image: none !important;
-}
-
-.dataTable thead th,
 table.dataTable thead th {
-  background: #295073 !important;
-  background-image: none !important;
-  background-color: #295073 !important;
-  color: #F2F2F2 !important;
-  font-weight: 600 !important;
-  padding: 15px 12px !important;
-  border: none !important;
-  text-align: left !important;
+  background: #f7f9fb;
+  border-bottom: 2px solid var(--line) !important;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+table.dataTable tbody td { font-size: 13.5px; padding: 9px 10px !important; }
+table.dataTable tbody tr:hover { background: var(--accent-wash) !important; }
+
+.table > thead > tr > th { border-bottom: 2px solid var(--line); }
+
+/* Monospace only where digits need to line up -- that is, inside
+ * verbatimTextOutput, which renders a <pre>. An earlier version of this rule
+ * also matched .shiny-text-output, which put every prose renderText in the
+ * application into a monospace face. */
+pre, code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+pre {
+  background: #fbfcfd;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--ink-soft);
+  padding: 12px 14px;
 }
 
-.dataTable tbody td,
-table.dataTable tbody td {
-  padding: 12px !important;
-  border-bottom: 1px solid #77BDD9 !important;
-  font-size: 13px !important;
-  color: #0D0D0D !important;
-  background: white !important;
-  background-image: none !important;
+/* ------------------------------------------------------------------ inputs */
+
+.btn {
+  border-radius: var(--radius);
+  font-weight: 600;
+  border: none;
+  padding: 8px 16px;
+}
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover, .btn-primary:focus { background: #1e3d59; }
+/* --warn and --pass are sized for status fills, which carry dark text. A button
+ * carries white text, and white on --warn measures 3.34:1. The button variants
+ * therefore take a darker step than the chips: 4.56:1 and 4.94:1 measured.
+ * --warn itself is left alone, because nothing else puts white on it.
+ * btn-success had no rule at all and was falling through to AdminLTE's #00A65A,
+ * a green that is not in this palette and reaches only 3.18:1. */
+.btn-warning { background: #A66800; color: #fff; }
+.btn-warning:hover, .btn-warning:focus { background: #8D5800; color: #fff; }
+.btn-success { background: var(--pass); color: #fff; }
+.btn-success:hover, .btn-success:focus { background: #006D51; color: #fff; }
+.btn-info { background: var(--accent-mid); color: #fff; }
+.btn-info:hover { background: #2b5872; }
+
+.form-control { border-radius: var(--radius); border-color: var(--line); }
+.form-control:focus {
+  border-color: var(--accent-light);
+  box-shadow: 0 0 0 3px rgba(119, 189, 217, 0.25);
 }
 
-.dataTable tbody tr:hover,
-table.dataTable tbody tr:hover {
-  background-color: rgba(158, 222, 197, 0.1) !important;
-  background-image: none !important;
+/* ------------------------------------------------------------- guide strip */
+
+/* Three steps, always visible on the input screen, so nobody has to guess
+ * what this application wants from them. */
+.guide {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.guide-step {
+  flex: 1 1 190px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+.guide-step .n {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 21px; height: 21px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  margin-right: 7px;
+}
+.guide-step b { font-size: 13.5px; }
+.guide-step p {
+  margin: 6px 0 0 0;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  line-height: 1.45;
 }
 
-.dataTable tbody tr:nth-child(even),
-table.dataTable tbody tr:nth-child(even) {
-  background-color: rgba(242, 242, 242, 0.3) !important;
-  background-image: none !important;
+/* --------------------------------------------------------------- helpers */
+
+.muted { color: var(--ink-soft); font-size: 13px; }
+.lede  { color: var(--ink-soft); font-size: 14px; margin-bottom: 14px; }
+
+.empty-state {
+  text-align: center;
+  padding: 44px 20px;
+  color: var(--ink-faint);
+}
+.empty-state h4 { color: var(--ink-soft); font-weight: 600; margin-bottom: 6px; }
+
+/* Respect a reduced-motion preference. */
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
 }
 
-/* DataTable controls */
-.dataTables_length select,
-.dataTables_filter input {
-  border: 2px solid #77BDD9 !important;
-  border-radius: 6px !important;
-  padding: 8px 12px !important;
-  color: #0D0D0D !important;
-  background: white !important;
-  background-image: none !important;
+/* Bootstrap's default button is a light surface and must keep dark text; every
+ * filled variant must keep light text.
+ *
+ * The :not() chain is load-bearing. Shiny keeps btn-default on the element when
+ * you pass class = "btn-primary", so nearly every button here is
+ * `btn btn-default btn-primary`. An unqualified .btn-default rule therefore
+ * also matches the filled buttons, and because it sits later in the file it won
+ * the background while the filled rule below won the colour -- white on white.
+ * The label only appeared on hover, where .btn-default:hover outranks both on
+ * specificity. Emoji icons kept their own colour throughout, which is what made
+ * it read as "the text is missing" rather than "the button is unstyled".
+ *
+ * Restricting the reset to buttons that carry no filled variant lets each rule
+ * apply to the buttons it was written for. */
+.btn-default:not(.btn-primary):not(.btn-info):not(.btn-warning):not(.btn-success):not(.btn-danger) {
+  background: var(--surface);
+  color: var(--ink) !important;
+  border: 1px solid var(--line);
 }
-
-.dataTables_length select:focus,
-.dataTables_filter input:focus {
-  border-color: #356B8C !important;
-  box-shadow: 0 0 0 0.2rem rgba(119, 189, 217, 0.3) !important;
-  outline: none !important;
+.btn-default:not(.btn-primary):not(.btn-info):not(.btn-warning):not(.btn-success):not(.btn-danger):hover {
+  background: #eef2f6;
+  color: var(--ink) !important;
 }
-
-.dataTables_paginate .paginate_button {
-  background: #77BDD9 !important;
-  background-image: none !important;
-  color: #F2F2F2 !important;
-  border: none !important;
-  border-radius: 4px !important;
-  margin: 0 2px !important;
-  padding: 8px 12px !important;
-}
-
-.dataTables_paginate .paginate_button:hover {
-  background: #356B8C !important;
-  background-image: none !important;
-  color: #F2F2F2 !important;
-}
-
-.dataTables_paginate .paginate_button.current {
-  background: #295073 !important;
-  background-image: none !important;
-  color: #F2F2F2 !important;
-}
-
-/* Plot Container Styles */
-.shiny-plot-output {
-  border-radius: 6px !important;
-  background: white !important;
-  background-image: none !important;
-  padding: 15px !important;
-  box-shadow: 0 1px 3px rgba(13, 13, 13, 0.1) !important;
-  border: 1px solid #77BDD9 !important;
-}
-
-/* Progress Bar Styles - NO GRADIENTS */
-.progress {
-  height: 8px !important;
-  border-radius: 10px !important;
-  background-color: #77BDD9 !important;
-  background-image: none !important;
-}
-
-.progress-bar {
-  border-radius: 10px !important;
-  transition: width 0.3s ease !important;
-  background: #356B8C !important;
-  background-image: none !important;
-  background-color: #356B8C !important;
-}
-
-/* Shiny Notification Styles */
-.shiny-notification {
-  background: white !important;
-  background-image: none !important;
-  border: 1px solid #77BDD9 !important;
-  border-left: 4px solid #356B8C !important;
-  color: #0D0D0D !important;
-  border-radius: 6px !important;
-}
-
-.shiny-notification-error {
-  border-left-color: #C81102 !important;
-}
-
-.shiny-notification-message {
-  border-left-color: #9EDEC5 !important;
-}
-
-/* Select input styling */
-select.form-control {
-  background: white !important;
-  background-image: none !important;
-  color: #0D0D0D !important;
-  border: 2px solid #77BDD9 !important;
-}
-
-select.form-control:focus {
-  border-color: #356B8C !important;
-  box-shadow: 0 0 0 0.2rem rgba(119, 189, 217, 0.3) !important;
-}
-
-/* Text and help text */
-.help-text,
-.help-block {
-  color: #77BDD9 !important;
-  font-style: italic !important;
-}
-
-/* Override any remaining blue/teal colors */
-a {
-  color: #356B8C !important;
-}
-
-a:hover,
-a:focus {
-  color: #295073 !important;
-}
-
-/* Ensure text inputs are readable */
-input[type="text"],
-input[type="number"],
-input[type="email"],
-input[type="password"],
-textarea {
-  background: white !important;
-  background-image: none !important;
-  color: #0D0D0D !important;
-  border: 2px solid #77BDD9 !important;
-}
-
-input[type="text"]:focus,
-input[type="number"]:focus,
-input[type="email"]:focus,
-input[type="password"]:focus,
-textarea:focus {
-  border-color: #356B8C !important;
-  box-shadow: 0 0 0 0.2rem rgba(119, 189, 217, 0.3) !important;
-  background: white !important;
-  background-image: none !important;
-}
-
-/* DataTable sorting arrows - match header text color */
-.dataTable thead th.sorting:before,
-.dataTable thead th.sorting:after,
-.dataTable thead th.sorting_asc:before,
-.dataTable thead th.sorting_asc:after,
-.dataTable thead th.sorting_desc:before,
-.dataTable thead th.sorting_desc:after,
-table.dataTable thead th.sorting:before,
-table.dataTable thead th.sorting:after,
-table.dataTable thead th.sorting_asc:before,
-table.dataTable thead th.sorting_asc:after,
-table.dataTable thead th.sorting_desc:before,
-table.dataTable thead th.sorting_desc:after {
-  color: #F2F2F2 !important;
-  opacity: 1 !important;
-}
-
-/* Ensure sorting arrows are visible on hover */
-.dataTable thead th.sorting:hover:before,
-.dataTable thead th.sorting:hover:after,
-table.dataTable thead th.sorting:hover:before,
-table.dataTable thead th.sorting:hover:after {
-  color: #F2F2F2 !important;
-  opacity: 1 !important;
-}
-
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .content {
-    padding: 10px !important;
-  }
-  
-  .box {
-    margin-bottom: 15px !important;
-  }
-  
-  .btn-lg {
-    padding: 12px 24px !important;
-    font-size: 14px !important;
-  }
+.btn-primary, .btn-info, .btn-warning, .btn-success, .btn-danger {
+  color: #fff !important;
 }

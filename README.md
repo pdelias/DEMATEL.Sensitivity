@@ -1,5 +1,7 @@
 # Spectral DEMATEL
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21852681.svg)](https://doi.org/10.5281/zenodo.21852681)
+
 A Shiny application for diagnosing DEMATEL influence matrices: the structural
 type of the system, whether the matrix is in scope, where influence enters and
 accumulates, and which relationship moves the system most.
@@ -28,8 +30,13 @@ Then the interface packages:
 
 ```r
 install.packages(c("shiny", "shinydashboard", "shinyWidgets", "DT",
-                   "plotly", "ggplot2", "ggrepel", "viridis", "reshape2"))
+                   "ggplot2", "ggrepel", "viridis"))
 ```
+
+`plotly` and `reshape2` used to be on that list and are not needed: neither is
+called any more, and between them they pulled `stringi`, `data.table`, `curl`
+and `httr` into the WebAssembly bundle — tens of megabytes on every first visit,
+for nothing.
 
 ## Run
 
@@ -67,6 +74,36 @@ Hierarchy has three readings and **they do not run the same way**.
 `hierarchy_sd` and `hierarchy_gini` are high when influence enters at a few
 factors; the participation ratio is **low**. Every display in this application
 carries the direction.
+
+## Citation
+
+```
+Delias, P. (2026). Spectral DEMATEL: a browser-based diagnosis of DEMATEL
+influence matrices. Zenodo. https://doi.org/10.5281/zenodo.21852681
+```
+
+```bibtex
+@software{delias_spectral_dematel_app,
+  author    = {Delias, Pavlos},
+  title     = {Spectral {DEMATEL}: a browser-based diagnosis of {DEMATEL} influence matrices},
+  publisher = {Zenodo},
+  year      = {2026},
+  doi       = {10.5281/zenodo.21852681},
+  url       = {https://pdelias.github.io/DEMATEL.Sensitivity/}
+}
+```
+
+That is the **concept DOI**: it always resolves to the newest release, which is
+what citing the tool means. Where the exact version matters — reproducing a
+number a reader can check — cite the **version DOI** from that release's Zenodo
+record instead. For v1.0.0 it is
+[10.5281/zenodo.21852682](https://doi.org/10.5281/zenodo.21852682).
+
+**Citing the mathematics is a different citation.** This application draws and
+explains; every spectral quantity is computed by `spectralDEMATEL`, which has
+its own DOI — [10.5281/zenodo.21849277](https://doi.org/10.5281/zenodo.21849277).
+Cite the package when the definitions are the point, this application when the
+tool is.
 
 ## Licence
 

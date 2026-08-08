@@ -20,6 +20,27 @@ library(viridis)
 #                              "https://cloud.r-project.org"))
 library(spectralDEMATEL)
 
+# The signed-quantity palette --------------------------------------------------
+#
+# Sensitivity is signed, so it is drawn on a diverging scale: two poles either
+# side of an achromatic midpoint. What makes such a scale honest is that the two
+# poles are equally far from the middle in lightness, because lightness is what
+# the eye reads as magnitude. The previous scale travelled 62.7 L* to the
+# negative pole and 11.8 to the positive, so a stabilizer at -0.5 looked
+# emphatic while an amplifier at +0.5 was nearly indistinguishable from an empty
+# cell. Every chart implied stabilizers mattered more, which is not a claim the
+# mathematics makes.
+#
+# The warm pole is copper rather than the green used before. At equal lightness
+# navy and green separate by only dE 10.6 for normal vision, under the floor of
+# 15 -- the old green only read as different because it was pale, which is the
+# same defect. Navy against copper measures dE 19.2 normal, 14.3 protan, 22.1
+# tritan. Measured with the palette validator, not chosen by eye.
+PAL_STABILIZE <- "#295073"   # negative sensitivity: the link damps the loop
+PAL_AMPLIFY   <- "#8A3B12"   # positive sensitivity: the link feeds the loop
+PAL_NEUTRAL   <- "#F1F3F4"   # zero, or not evaluated: achromatic on purpose
+PAL_INK       <- "#16212B"   # label ink, matching --ink in styles.css
+
 # Source all R functions with error handling
 source_files <- c(
   "R/engine.R",
@@ -733,9 +754,12 @@ ui <- dashboardPage(
                   div(
                     style = "text-align: right;",
                     h5("Legend:"),
-                    span("Amplifier links ", style = "color: #9EDEC5;"),
+                    # Colour here is a label, not a fill, so it takes the pole
+                    # colours directly. The old green measured 1.4:1 as text on
+                    # white and was effectively unreadable.
+                    span("Amplifier links ", style = paste0("color: ", PAL_AMPLIFY, "; font-weight: 600;")),
                     span("Increases dominant eigenvalue | "),
-                    span("Stabilizer links: ", style = "color: #295073;"),
+                    span("Stabilizer links: ", style = paste0("color: ", PAL_STABILIZE, "; font-weight: 600;")),
                     span("Decreases dominant eigenvalue")
                   )
                 )
@@ -1844,7 +1868,9 @@ server <- function(input, output, session) {
           geom_col(alpha = 0.8) +
           geom_text(aes(label = paste0(Count, "\n(", Percentage, "%)")), 
                     vjust = -0.5, fontface = "bold") +
-          scale_fill_manual(values = c("Amplifying" = "#9EDEC5", "Stabilizing" = "#295073", "Near-zero" = "#F2F2F2")) +
+          scale_fill_manual(values = c("Amplifying"  = PAL_AMPLIFY,
+                                       "Stabilizing" = PAL_STABILIZE,
+                                       "Near-zero"   = PAL_NEUTRAL)) +
           theme_minimal() +
           theme(legend.position = "none",
                 axis.title.x = element_blank(),
@@ -1889,8 +1915,9 @@ server <- function(input, output, session) {
       }
       
       p <- ggplot(sens_melted, aes(x = To_Factor, y = From_Factor, fill = Sensitivity)) +
-        geom_tile(color = "white", size = 0.5) +
-        scale_fill_gradient2(low = "#295073", mid = "#F2F2F2", high = "#9EDEC5",
+        geom_tile(colour = "white", linewidth = 0.5) +
+        scale_fill_gradient2(low = PAL_STABILIZE, mid = PAL_NEUTRAL,
+                             high = PAL_AMPLIFY,
                              midpoint = 0, name = "Sensitivity") +
         # FIX: Add explicit factor ordering to match matrix
         ggplot2::scale_y_discrete(limits = rev(values$factor_names)) +  # Reverse y-axis for matrix order
@@ -1910,7 +1937,16 @@ server <- function(input, output, session) {
         )
       
       if (input$show_heatmap_values && nrow(values$matrix_A) <= 10) {
-        p <- p + geom_text(aes(label = round(Sensitivity, 3)), size = 3, color = "black")
+        # Both ends of a symmetric diverging scale are dark, so a fixed black
+        # label is unreadable on either of them. The label follows the fill:
+        # white out towards the poles, ink near the achromatic middle.
+        dark_at <- 0.55 * max(abs(sens_melted$Sensitivity), na.rm = TRUE)
+        p <- p +
+          geom_text(aes(label = round(Sensitivity, 3),
+                        colour = abs(Sensitivity) > dark_at),
+                    size = 3, show.legend = FALSE) +
+          scale_colour_manual(values = c(`FALSE` = PAL_INK, `TRUE` = "#FFFFFF"),
+                              guide = "none")
       }
       
       return(p)
@@ -1966,8 +2002,10 @@ server <- function(input, output, session) {
       }
       
       ggplot(data.frame(Sensitivity = sens_values), aes(x = Sensitivity)) +
-        geom_histogram(bins = 30, alpha = 0.7, fill = "#295073", color = "white") +
-        geom_vline(xintercept = 0, color = "#C81102", linetype = "dashed", size = 1) +
+        geom_histogram(bins = 30, alpha = 0.7, fill = PAL_STABILIZE, colour = "white") +
+        # Zero is a reference line, not a warning. It was red, which read as a
+        # threshold being breached; it marks the sign change and nothing else.
+        geom_vline(xintercept = 0, colour = "#55636F", linetype = "dashed", linewidth = 0.8) +
         theme_minimal() +
         theme(plot.title = element_text(size = 14, face = "bold")) +
         labs(
@@ -2013,7 +2051,7 @@ server <- function(input, output, session) {
             geom_col(alpha = 0.8) +
             coord_flip() +
             scale_fill_manual(
-              values = c("Amplifying" = "#9EDEC5", "Stabilizer links" = "#295073"),
+              values = c("Amplifying" = PAL_AMPLIFY, "Stabilizer links" = PAL_STABILIZE),
               name = "Effect Type"
             ) +
             theme_minimal() +

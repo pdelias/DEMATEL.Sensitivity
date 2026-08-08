@@ -258,8 +258,16 @@ pre {
 }
 .btn-primary { background: var(--accent); color: #fff; }
 .btn-primary:hover, .btn-primary:focus { background: #1e3d59; }
-.btn-warning { background: var(--warn); color: #fff; }
-.btn-warning:hover, .btn-warning:focus { background: #a66700; color: #fff; }
+/* --warn and --pass are sized for status fills, which carry dark text. A button
+ * carries white text, and white on --warn measures 3.34:1. The button variants
+ * therefore take a darker step than the chips: 4.56:1 and 4.94:1 measured.
+ * --warn itself is left alone, because nothing else puts white on it.
+ * btn-success had no rule at all and was falling through to AdminLTE's #00A65A,
+ * a green that is not in this palette and reaches only 3.18:1. */
+.btn-warning { background: #A66800; color: #fff; }
+.btn-warning:hover, .btn-warning:focus { background: #8D5800; color: #fff; }
+.btn-success { background: var(--pass); color: #fff; }
+.btn-success:hover, .btn-success:focus { background: #006D51; color: #fff; }
 .btn-info { background: var(--accent-mid); color: #fff; }
 .btn-info:hover { background: #2b5872; }
 
@@ -324,11 +332,28 @@ pre {
 }
 
 /* Bootstrap's default button is a light surface and must keep dark text; every
- * filled variant must keep light text. The previous rules set a background
- * without a colour, which left the primary action dark-on-dark. */
-.btn-default { background: var(--surface); color: var(--ink) !important;
-               border: 1px solid var(--line); }
-.btn-default:hover { background: #eef2f6; color: var(--ink) !important; }
+ * filled variant must keep light text.
+ *
+ * The :not() chain is load-bearing. Shiny keeps btn-default on the element when
+ * you pass class = "btn-primary", so nearly every button here is
+ * `btn btn-default btn-primary`. An unqualified .btn-default rule therefore
+ * also matches the filled buttons, and because it sits later in the file it won
+ * the background while the filled rule below won the colour -- white on white.
+ * The label only appeared on hover, where .btn-default:hover outranks both on
+ * specificity. Emoji icons kept their own colour throughout, which is what made
+ * it read as "the text is missing" rather than "the button is unstyled".
+ *
+ * Restricting the reset to buttons that carry no filled variant lets each rule
+ * apply to the buttons it was written for. */
+.btn-default:not(.btn-primary):not(.btn-info):not(.btn-warning):not(.btn-success):not(.btn-danger) {
+  background: var(--surface);
+  color: var(--ink) !important;
+  border: 1px solid var(--line);
+}
+.btn-default:not(.btn-primary):not(.btn-info):not(.btn-warning):not(.btn-success):not(.btn-danger):hover {
+  background: #eef2f6;
+  color: var(--ink) !important;
+}
 .btn-primary, .btn-info, .btn-warning, .btn-success, .btn-danger {
   color: #fff !important;
 }

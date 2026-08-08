@@ -300,6 +300,41 @@ ui <- dashboardPage(
 
           fluidRow(
             box(
+              title = "🎲 How much should I trust that type?",
+              status = "warning",
+              solidHeader = TRUE,
+              width = 12,
+              collapsible = TRUE,
+
+              p(paste("Two different doubts. The surrogate baseline asks whether",
+                      "this matrix's own rating distribution would have produced",
+                      "these numbers anyway. Measurement stability asks whether",
+                      "the type survives the noise expert ratings carry. A type",
+                      "can pass one and fail the other."),
+                style = "color: #666;"),
+
+              fluidRow(
+                column(3, numericInput("robust_B", "Draws",
+                                       value = 200, min = 20, max = 1000, step = 20)),
+                column(3, numericInput("robust_tolerance", "Rating noise (±)",
+                                       value = 0.5, min = 0.05, max = 2, step = 0.05)),
+                column(3, numericInput("robust_seed", "Seed",
+                                       value = 42, min = 1, step = 1)),
+                column(3, br(), actionButton("run_robustness", "Run",
+                                             class = "btn-warning"))
+              ),
+              helpText(paste("The seed is exposed so a figure you publish can be",
+                             "reproduced. Lower the draw count if you are waiting.")),
+
+              br(),
+              DT::dataTableOutput("surrogate_table"),
+              br(),
+              verbatimTextOutput("robustness_text")
+            )
+          ),
+
+          fluidRow(
+            box(
               title = "📈 Complete Spectral Analysis Results", 
               status = "primary", 
               solidHeader = TRUE,
@@ -1449,6 +1484,38 @@ server <- function(input, output, session) {
                      columnDefs = list(list(width = "45%", targets = 3))),
       rownames = FALSE
     )
+  })
+
+  # ---------------------------------------------------------------
+  # Robustness. Run on demand and never on page load: the surrogate
+  # ensemble is the one part of this application that is not instant.
+  # The seed is exposed so a user can reproduce a figure they publish.
+  # ---------------------------------------------------------------
+  robustness <- eventReactive(input$run_robustness, {
+    req(values$spectral_results)
+    withProgress(message = "Shuffling and perturbing...", {
+      robustness_report(values$spectral_results,
+                        B = input$robust_B,
+                        tolerance = input$robust_tolerance,
+                        seed = input$robust_seed)
+    })
+  })
+
+  output$surrogate_table <- DT::renderDataTable({
+    rr <- robustness()
+    tbl <- surrogate_table(rr)
+    validate(need(!is.null(tbl), paste(
+      "No surrogate baseline for this matrix: the shuffle has to preserve",
+      "strong connectivity and this matrix does not have it. See the",
+      "assumption checks.")))
+    DT::datatable(tbl, options = list(dom = 't', scrollX = TRUE),
+                  rownames = FALSE)
+  })
+
+  output$robustness_text <- renderText({
+    rr <- robustness()
+    validate(need(!is.null(rr), "Process a matrix first."))
+    robustness_text(rr, values$spectral_results)
   })
 
   # ---------------------------------------------------------------

@@ -332,6 +332,131 @@ CORPUS_SHARE <- local({
   as.list(cp$count / cp$n)
 })
 
+#' The robustness panel: is this type worth anything?
+#'
+#' Two different doubts, kept apart because they have different answers.
+#' The surrogate baseline asks whether the rating distribution alone would have
+#' produced these numbers. Measurement stability asks whether the type survives
+#' the noise expert ratings carry. A type can pass one and fail the other.
+#'
+#' Run on demand, never on page load: the surrogate ensemble is the one part of
+#' this that is not instant.
+robustness_report <- function(res, B = 200, tolerance = 0.5, seed = 42) {
+  if (!isTRUE(res$computable)) return(NULL)
+  A <- res$A_matrix
+
+  sp <- spectralDEMATEL::surrogate_position(A, B = B, seed = seed)
+  ms <- spectralDEMATEL::measurement_stability(A, tolerance = tolerance,
+                                               B = B, seed = seed)
+  list(surrogate = sp, measurement = ms, B = B, tolerance = tolerance,
+       seed = seed)
+}
+
+#' The surrogate baseline as a table a person can read.
+surrogate_table <- function(rr) {
+  if (is.null(rr) || is.null(rr$surrogate)) return(NULL)
+  m <- rr$surrogate$metrics
+
+  label <- c(mu_max = "Coupling", hierarchy_sd = "Hierarchy (SD)",
+             dominance = "Mode dominance")
+  verdict <- vapply(seq_len(nrow(m)), function(i) {
+    if (m$outside[i]) {
+      sprintf("outside the whole ensemble (%s every draw)",
+              if (m$share_ge[i] == 0) "above" else "below")
+    } else if (m$share_ge[i] > 0.9 || m$share_ge[i] < 0.1) {
+      "near the edge of the ensemble"
+    } else {
+      "inside the ensemble — the shuffle reproduces this"
+    }
+  }, character(1))
+
+  data.frame(
+    Diagnostic = unname(label[m$metric]),
+    Observed   = formatC(m$observed, format = "f", digits = 4),
+    `Surrogate range` = sprintf("%.4f – %.4f", m$min, m$max),
+    `Surrogate median` = formatC(m$median, format = "f", digits = 4),
+    Position   = verdict,
+    check.names = FALSE, stringsAsFactors = FALSE
+  )
+}
+
+#' What the robustness panel means, in prose.
+robustness_text <- function(rr, res) {
+  if (is.null(rr)) return("")
+  out <- character(0)
+
+  sp <- rr$surrogate
+  if (is.null(sp)) {
+    out <- c(out, paste(
+      "SURROGATE BASELINE\n  Not available. The shuffle has to preserve strong",
+      "connectivity, and this matrix does not have it to begin with — see the",
+      "assumption checks. Fix the disconnected factors and the baseline becomes",
+      "computable."))
+  } else {
+    n_outside <- sum(sp$metrics$outside)
+    n_total <- nrow(sp$metrics)
+    reading <- if (n_outside == 0) paste(
+      "None of the three falls outside the ensemble. On this evidence the",
+      "structure is what this matrix's rating distribution implies on its own:",
+      "shuffling which factor influences which reproduces all three",
+      "diagnostics. That is worth knowing before drawing conclusions from",
+      "them.")
+    else if (n_outside == n_total) paste(
+      "All three fall outside the whole ensemble. None of them is something",
+      "the rating distribution produces on its own, so the structure is",
+      "something the analyst built.")
+    else sprintf(paste(
+      "%d of the %d fall outside the whole ensemble, and are therefore not",
+      "something the rating distribution produces on its own. The",
+      "%s that does not is reproduced by shuffling, so read it with more",
+      "caution than the others."),
+      n_outside, n_total,
+      if (n_total - n_outside == 1) "one" else "others")
+
+    out <- c(out, sprintf(paste(
+      "SURROGATE BASELINE  (%d shuffles, seed %d)\n",
+      " Shuffling this matrix's own ratings at random, holding the number of",
+      "factors, the density and the exact set of values fixed.\n  %s"),
+      rr$B, rr$seed, reading))
+
+    # The honest caveat: for a common type this says almost nothing.
+    common <- sp$type_share > 0.5
+    out <- c(out, sprintf(paste(
+      "  The same type arises in %.0f%% of shuffles.%s"),
+      100 * sp$type_share,
+      if (common) paste(" That is weak evidence either way: nearly 70% of the",
+                        "reference corpus is diffuse-amplified, so a shuffled",
+                        "matrix usually lands there too. Read the per-diagnostic",
+                        "positions above instead.")
+      else " The observed type is an uncommon one, so this is informative."))
+  }
+
+  ms <- rr$measurement
+  if (!is.null(ms)) {
+    out <- c(out, sprintf(paste(
+      "\nMEASUREMENT STABILITY  (%d draws, +/- %.2f rating points)\n",
+      " The type is %s in %.0f%% of perturbed matrices.%s"),
+      ms$B_admissible, ms$tolerance, ms$observed_type, 100 * ms$share_same,
+      if (ms$share_same >= 0.95)
+        " Half a rating point of noise cannot move this system."
+      else if (ms$share_same >= 0.75)
+        " Mostly stable, but the reading is not immune to rating noise."
+      else paste(" This system sits close enough to a boundary that expert",
+                 "noise alone decides which side it falls on. Treat the type",
+                 "as undetermined rather than borderline.")))
+    if (length(ms$type_table) > 1) {
+      out <- c(out, paste0("  Types across the draws: ",
+                           paste(names(ms$type_table), ms$type_table,
+                                 sep = " ", collapse = ",  ")))
+    }
+    out <- c(out, sprintf(paste(
+      "  Recorded zeros were left alone (%s): a rating of zero is a judgement",
+      "that there is no influence, not a one with noise on it."), ms$perturb))
+  }
+
+  paste(out, collapse = "\n")
+}
+
 #' A long-format export carrying the diagnostics, the checks and the engine
 #' version together.
 #'

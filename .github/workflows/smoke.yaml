@@ -23,15 +23,17 @@ jobs:
     timeout-minutes: 25
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: r-lib/actions/setup-r@v2
         with:
           use-public-rspm: true
 
       # The application's own dependencies, plus the two the test needs.
-      # spectralDEMATEL comes from r-universe, which is also where the
-      # WebAssembly build the deployed app uses is produced.
+      # spectralDEMATEL is not listed here: setup-r-dependencies has no
+      # extra-repositories input, so naming r-universe there was silently
+      # ignored -- the run warned "Unexpected input(s) 'extra-repositories'"
+      # and carried on. The explicit step below is what actually installs it.
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
           packages: |
@@ -45,7 +47,6 @@ jobs:
             any::viridis
             any::chromote
             any::processx
-          extra-repositories: https://pdelias.r-universe.dev
 
       - name: Install spectralDEMATEL from r-universe
         run: |

@@ -1125,19 +1125,33 @@ ui <- dashboardPage(
 
         fluidRow(
           box(
-            title = "Help & Documentation", 
-            status = "info", 
+            title = "How to work through it",
+            status = "info",
             solidHeader = TRUE,
             width = 6,
-            
-            h4("Getting Started:"),
+
+            # This list named a six-step flow that the application does not have.
+            # "Run spectral analysis" was a step with no control behind it: the
+            # diagnosis arrives with Process Matrix. It also used the vocabulary
+            # of the implementation while the sidebar had been rewritten into
+            # questions, so Help and the screen disagreed about what things are
+            # called. Each step below names a tab the reader can see and a
+            # button they can press.
             tags$ol(
-              tags$li("Upload your DEMATEL direct influence matrix (A) or use the example dataset"),
-              tags$li("Process the matrix to compute DEMATEL basics (D, T matrices)"),
-              tags$li("Run spectral analysis to understand system dynamics"),
-              tags$li("Compute sensitivity analysis to find critical relationships"),
-              tags$li("Identify intervention opportunities"),
-              tags$li("Generate comprehensive reports")
+              tags$li(strong("Your matrix."), " Paste or upload a direct influence matrix, ",
+                      "or choose the example, then press Process Matrix."),
+              tags$li(strong("The diagnosis."), " What kind of system this is, how firmly ",
+                      "that holds, and whether the matrix is in scope at all. ",
+                      "It is ready as soon as the matrix is processed."),
+              tags$li(strong("Where to act."), " Press Run Sensitivity Analysis for the ",
+                      "derivative of the dominant eigenvalue in every link, and the ",
+                      "condition number that says how far to trust it."),
+              tags$li(strong("Strongest links."), " The relationships that carry the ",
+                      "influence, ranked."),
+              tags$li(strong("Trying a change."), " What a given intervention would do ",
+                      "to the dominant eigenvalue."),
+              tags$li(strong("Show your work."), " Download the matrices, the ",
+                      "diagnostics and a written report.")
             ),
             
             br(),

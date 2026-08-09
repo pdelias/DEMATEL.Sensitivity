@@ -123,28 +123,36 @@ create_dematel_interrelationship_map.DEMATEL_Sensitivity <- function(obj) {
       y = "Net Effect (r - c): Cause ↑ / Effect ↓"
     )
   
-  # Add quadrant labels with safe coordinate calculation
-  tryCatch({
-    x_range <- range(prominence)
-    y_range <- range(net_effect)
-    
-    p <- p +
-      ggplot2::annotate("text", x = x_range[2] * 0.9, y = y_range[2] * 0.9, 
-                        label = "High Prominence\nNet Cause", 
-                        size = 3, alpha = 0.6, fontface = "italic") +
-      ggplot2::annotate("text", x = x_range[1] * 1.1, y = y_range[2] * 0.9, 
-                        label = "Low Prominence\nNet Cause", 
-                        size = 3, alpha = 0.6, fontface = "italic") +
-      ggplot2::annotate("text", x = x_range[2] * 0.9, y = y_range[1] * 0.9, 
-                        label = "High Prominence\nNet Effect", 
-                        size = 3, alpha = 0.6, fontface = "italic") +
-      ggplot2::annotate("text", x = x_range[1] * 1.1, y = y_range[1] * 0.9, 
-                        label = "Low Prominence\nNet Effect", 
-                        size = 3, alpha = 0.6, fontface = "italic")
-  }, error = function(e) {
-    # Skip quadrant labels if there's an error
-    warning("Could not add quadrant labels: ", e$message)
-  })
-  
+  # Quadrant labels, pinned to the panel corners.
+  #
+  # These were placed at range(prominence)[2] * 0.9 and similar -- scaling the
+  # data *value* rather than the position. With prominence spanning 4.5 to 7.2
+  # that puts the "corner" label at 6.48, which is not a corner but the middle
+  # of the points, and the factor names collided with it. On any data straddling
+  # zero it is worse: multiplying -1.2 by 0.9 moves the label towards the origin
+  # rather than away from it.
+  #
+  # -Inf and Inf pin to the panel edges whatever the data does, so there is no
+  # arithmetic left to get wrong, and the expansion below reserves margin for
+  # them to sit in. That also removes the reason for the tryCatch that used to
+  # wrap this: range() arithmetic could fail, edge-pinning cannot, and a
+  # warning that silently dropped the labels hid the problem rather than showing
+  # it.
+  corner <- function(x, y, hjust, vjust, label) {
+    ggplot2::annotate("text", x = x, y = y, hjust = hjust, vjust = vjust,
+                      label = label, size = 3, colour = "grey45",
+                      fontface = "italic", lineheight = 0.95)
+  }
+
+  p <- p +
+    # Room at the edges for the labels, so they are beside the data rather than
+    # on top of it.
+    ggplot2::scale_x_continuous(expand = ggplot2::expansion(mult = 0.14)) +
+    ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = 0.16)) +
+    corner( Inf,  Inf, 1.08,  1.25, "High Prominence\nNet Cause") +
+    corner(-Inf,  Inf, -0.08, 1.25, "Low Prominence\nNet Cause") +
+    corner( Inf, -Inf, 1.08, -0.35, "High Prominence\nNet Effect") +
+    corner(-Inf, -Inf, -0.08, -0.35, "Low Prominence\nNet Effect")
+
   return(p)
 }

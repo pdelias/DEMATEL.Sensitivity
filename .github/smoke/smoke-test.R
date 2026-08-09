@@ -129,14 +129,33 @@ banner <- function() {
 
 report(!grepl('"cls":true', banner()), "the banner is absent when idle", banner())
 
-# The CSS half, asserted without any timer. Adding the class by hand is the one
-# way to check the rules render that cannot be raced by anything Shiny does.
-invisible(js("document.body.classList.add('sd-working')"))
-report(grepl('"pill":true', banner()) &&
-       grepl('"bar":"3px"', banner()) &&
-       grepl('"cursor":"progress"', banner()),
-       "the class produces a bar, a message and a busy cursor", banner())
-invisible(js("document.body.classList.remove('sd-working')"))
+# The CSS half. This reads the rules out of the stylesheet rather than applying
+# the class to a live element, because applying it is not deterministic either:
+# the application's own shiny:idle handler removes the class, and on a fast
+# runner idle fires often enough during startup to strip it between the add and
+# the read. That failed this assertion once, after a previous version had
+# already failed for the mirror-image reason.
+#
+# Reading the rules is what the assertion was for in any case. It exists because
+# an unterminated comment once silently dropped `cursor: progress`, and a
+# missing rule is missing whether or not anything is currently busy.
+css <- js(paste0(
+  "(function(){var out={};",
+  "for (var i=0;i<document.styleSheets.length;i++){var rs;",
+  "  try { rs = document.styleSheets[i].cssRules } catch(e) { continue }",
+  "  for (var j=0;j<rs.length;j++){ var r=rs[j];",
+  "    if(!r.selectorText) continue;",
+  "    if(r.selectorText.indexOf('sd-working')===-1) continue;",
+  "    out[r.selectorText] = r.style.cssText;",
+  "  }}",
+  "return JSON.stringify(out);})()"))
+
+report(grepl("sd-working::before", css) && grepl("height: 3px", css),
+       "the stylesheet defines the working bar", css)
+report(grepl("sd-working::after", css) && grepl("content:", css),
+       "the stylesheet defines the working message")
+report(grepl("cursor: progress", css),
+       "the stylesheet defines the busy cursor")
 
 # The wiring half. This one is genuinely racy and the race is the feature: the
 # handler waits 400 ms before showing anything, so a fast operation never

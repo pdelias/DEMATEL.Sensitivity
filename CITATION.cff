@@ -1,0 +1,41 @@
+cff-version: 1.2.0
+message: "If you use this application, please cite it using the metadata below."
+title: "Spectral DEMATEL: a browser-based diagnosis of DEMATEL influence matrices"
+abstract: >-
+  A Shiny application that diagnoses a DEMATEL influence matrix: the structural
+  type of the system, whether the matrix is in scope, how influence enters and
+  accumulates, which single relationship moves the system most, and how firmly
+  any of that is held. It runs entirely in the browser on WebAssembly, so no
+  matrix a user pastes ever leaves their machine. Every spectral quantity is
+  computed by the spectralDEMATEL package.
+type: software
+authors:
+  - family-names: Delias
+    given-names: Pavlos
+    orcid: "https://orcid.org/0000-0002-3722-2307"
+    affiliation: "Democritus University of Thrace"
+# The concept DOI, which always resolves to the newest release. A version DOI
+# here would send every later reader to whichever release happened to be current
+# when this file was written.
+doi: 10.5281/zenodo.21852681
+repository-code: "https://github.com/pdelias/DEMATEL.Sensitivity"
+url: "https://pdelias.github.io/DEMATEL.Sensitivity/"
+license: MIT
+keywords:
+  - DEMATEL
+  - multi-criteria decision analysis
+  - decision support systems
+  - spectral analysis
+  - eigenvalue sensitivity
+  - influence matrix
+  - Shiny
+  - WebAssembly
+references:
+  - type: software
+    title: "spectralDEMATEL: Spectral Diagnostics for DEMATEL Influence Matrices"
+    authors:
+      - family-names: Delias
+        given-names: Pavlos
+        orcid: "https://orcid.org/0000-0002-3722-2307"
+    doi: 10.5281/zenodo.21849277
+    notes: "The engine. This application computes nothing of its own."
